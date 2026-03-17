@@ -24,99 +24,6 @@ colnames(CSSG)
 ```
 
 
-```{r}
-library(dplyr)
-library(tidyr)
-
-# Lire le fichier CSSA
-CSSA <- read.csv("data/df_binarise_final.csv", sep=";", stringsAsFactors = FALSE, check.names = FALSE)
-
-# Colonnes OB et SUB
-variables_OB <- c("cssdoul", "csshypall", "csstemp", "cssoed", "csseryth", "csssud", "csstroph", "cssforcemoy")
-variables_SUB <- c("css2","css3","css4","css5","css6","css7","css8","css9")
-
-# Pivot long pour transformer en format long
-CSSA_long <- CSSA %>%
-  pivot_longer(
-    cols = -sid,
-    names_to = c("Visit", "Variable"),
-    names_pattern = "v(\\d+)_(.*)",
-    values_to = "Value"
-  ) %>%
-  mutate(Visit = as.integer(Visit))
-
-# Séparer OB et SUB
-CSSA_OB <- CSSA_long %>% 
-  filter(Variable %in% variables_OB) %>%
-  pivot_wider(names_from = Variable, values_from = Value)
-
-CSSA_SUB <- CSSA_long %>% 
-  filter(Variable %in% variables_SUB) %>%
-  pivot_wider(names_from = Variable, values_from = Value)
-
-# Combiner OB et SUB sur la même ligne
-CSSA_final <- CSSA_OB %>%
-  left_join(CSSA_SUB, by = c("sid","Visit")) %>%
-  rename(
-    ID = sid,
-    CSS_OB_Pain = cssdoul,
-    CSS_OB_Hyperalgesia = csshypall,
-    CSS_OB_Temperature = csstemp,
-    CSS_OB_Oedema = cssoed,
-    CSS_OB_Erythema = csseryth,
-    CSS_OB_Sudation = csssud,
-    CSS_OB_Trophicity = csstroph,
-    CSS_OB_Strength = cssforcemoy,
-    CSS_SUB_Pain = css2,
-    CSS_SUB_Hyperalgesia = css3,
-    CSS_SUB_Oedema = css4,
-    CSS_SUB_Erythema = css5,
-    CSS_SUB_Sudation = css6,
-    CSS_SUB_Trophicity = css7,
-    CSS_SUB_Temperature = css8,
-    CSS_SUB_Strength = css9
-  ) %>%
-  mutate(Date = paste0("v", Visit)) %>%
-  arrange(ID, Visit)
-
-# Vérifier
-head(CSSA_final)
-```
-```{r}
-head(CSSA_final)
-str(CSSA_final)
-```
-
-```{r}
-library(dplyr)
-
-# suppose CSSG_long est ton fichier tuteur
-CSSG_long <- read.csv("data/CSS_long.csv", sep=",", stringsAsFactors = FALSE)
-
-# faire un left join
-compare <- CSSA_final %>%
-  left_join(CSSG_long, by = c("ID", "Visit"), suffix = c(".A", ".G"))
-
-# toutes les colonnes OB et SUB à comparer
-cols_to_compare <- grep("CSS_OB|CSS_SUB", colnames(compare), value = TRUE)
-
-# créer des colonnes TRUE/FALSE pour chaque comparaison
-for(col in cols_to_compare) {
-  col_G <- sub("\\.A$", ".G", col)  # colonne du fichier tuteur
-  compare[[paste0(col, "_match")]] <- compare[[col]] == compare[[col_G]]
-}
-
-# vérifier si tout correspond
-all_cols_match <- sapply(grep("_match$", colnames(compare), value = TRUE), 
-                         function(x) all(compare[[x]], na.rm = TRUE))
-all_cols_match
-
-# ou afficher uniquement les lignes où il y a au moins une différence
-diff_lines <- compare %>%
-  filter(if_any(ends_with("_match"), ~ . == FALSE))
-
-diff_lines
-```
 
 ```{r}
 CSSScores <- read.csv("data/df_scores_final.csv", sep=";")
@@ -126,6 +33,7 @@ str(CSSScores)
 summary(CSSScores)
 colnames(CSSScores)
 ```
+
 ```{r}
 #bland Altman for V1
 
@@ -153,6 +61,7 @@ ggplot(CSSScores, aes(x = V1_mean, y = V1_diff)) +
        x = "Moyenne des scores (Obj & Subj)",
        y = "Différence des scores (Obj - Subj)")
 ```
+
 ```{r}
 library(ggplot2)
 
