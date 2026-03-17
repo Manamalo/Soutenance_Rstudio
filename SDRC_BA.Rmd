@@ -32,6 +32,22 @@ head(CSSScores)
 str(CSSScores)
 summary(CSSScores)
 colnames(CSSScores)
+
+install.packages("psych")
+library(psych)
+describe(CSSScores)
+cols_obj <- grep("Scoreobj", colnames(CSSScores))
+
+boxplot(CSSScores[, cols_obj],
+        las = 2,
+        main = "Scores objectifs",
+        col = "lightgreen")
+cols_subj <- grep("Scoresubj", colnames(CSSScores))
+
+boxplot(CSSScores[, cols_subj],
+        las = 2,
+        main = "Scores subjectifs",
+        col = "lightpink")
 ```
 
 ```{r}
