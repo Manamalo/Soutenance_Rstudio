@@ -7,20 +7,211 @@ date: "2026-02-13"
 ```{r}
 CSSA <- read.csv("data/df_binarise_final.csv", sep=";")
 
-head(CSSA)
-str(CSSA)
+#head(CSSA)
+#str(CSSA)
 summary(CSSA)
-colnames(CSSA)
+#colnames(CSSA)
+#sum(is.na(CSSG))
 ```
 
 
 ```{r}
-CSSG <- read.csv("data/CSS_long.csv", sep=";")
+CSSG <- read.csv2("data/CSS_long.csv", sep=",")
 
 head(CSSG)
 str(CSSG)
 summary(CSSG)
 colnames(CSSG)
+sum(is.na(CSSG))
+
+```
+
+
+```{r}
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+
+# 1️⃣ Préparer CSSA pour le graphique
+CSSA_long_plot <- CSSA_wide_unique %>%
+  pivot_longer(cols = starts_with("CSS_"),
+               names_to = "variable",
+               values_to = "value") %>%
+  mutate(source = "CSSA")
+
+# 2️⃣ Préparer CSSG pour le graphique
+CSSG_long_plot <- CSSG %>%
+  pivot_longer(cols = starts_with("CSS_"),
+               names_to = "variable",
+               values_to = "value") %>%
+  mutate(source = "CSSG")
+
+# 3️⃣ Combiner les deux datasets
+combined_plot <- bind_rows(CSSA_long_plot, CSSG_long_plot)
+
+# 4️⃣ Graphique côte à côte
+ggplot(combined_plot, aes(x = variable, fill = factor(value))) +
+  geom_bar(position = "fill") +
+  facet_wrap(~source) +  # une facette par dataset
+  labs(y = "Proportion", fill = "Valeur") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+
+
+```{r}
+library(dplyr)
+
+# Résumé CSSA
+CSSA_summary <- CSSA %>%
+  summarise(across(where(is.numeric), list(
+    mean = ~ mean(.x, na.rm = TRUE),
+    median = ~ median(.x, na.rm = TRUE),
+    sum = ~ sum(.x, na.rm = TRUE)
+  )))
+
+CSSA_summary  # Afficher le résumé CSSA
+
+# Résumé CSSG
+CSSG_summary <- CSSG %>%
+  summarise(across(where(is.numeric), list(
+    mean = ~ mean(.x, na.rm = TRUE),
+    median = ~ median(.x, na.rm = TRUE),
+    sum = ~ sum(.x, na.rm = TRUE)
+  )))
+
+CSSG_summary  # Afficher le résumé CSSG
+```
+
+
+```{r}
+library(tidyverse)
+
+# 1️⃣ Transformation
+CSSA_long <- CSSA %>%
+  pivot_longer(
+    -sid,
+    names_to = "var",
+    values_to = "value"
+  ) %>%
+  separate(var, into = c("visit", "variable"), sep = "_", extra = "merge") %>%
+  mutate(
+    Visit = as.numeric(gsub("v", "", visit))
+  )
+
+# 2️⃣ Mapping des variables
+mapping <- c(
+  # CSS_OB
+  "cssdoul" = "CSS_OB_Pain",
+  "csshypall" = "CSS_OB_Hyperalgesia",
+  "csstemp" = "CSS_OB_Temperature",
+  "cssoed" = "CSS_OB_Oedema",
+  "csseryth" = "CSS_OB_Erythema",
+  "csssud" = "CSS_OB_Sudation",
+  "csstroph" = "CSS_OB_Trophicity",
+  "cssforcemoy" = "CSS_OB_Strength",
+  # CSS_SUB
+  "css2" = "CSS_SUB_Pain",
+  "css3" = "CSS_SUB_Hyperalgesia",
+  "css4" = "CSS_SUB_Temperature",
+  "css5" = "CSS_SUB_Erythema",
+  "css6" = "CSS_SUB_Sudation",
+  "css7" = "CSS_SUB_Oedema",
+  "css8" = "CSS_SUB_Trophicity",
+  "css9" = "CSS_SUB_Strength"
+)
+CSSA_long <- CSSA_long %>%
+  mutate(variable = recode(variable, !!!mapping))
+
+# 3️⃣ Pivot vers format tuteur et renommer ID
+CSSA_wide <- CSSA_long %>%
+  pivot_wider(
+    names_from = variable,
+    values_from = value
+  ) %>%
+  rename(ID = sid)
+
+# 4️⃣ Mapping des patients
+id_map <- c(
+  "case 1" = "C01P001",
+  "case 2" = "C01P002",
+  "case 3" = "C01P003",
+  "case 4" = "C01P005",
+  "case 5" = "C01P006",
+  "case 6" = "C01P007"
+)
+CSSA_wide <- CSSA_wide %>%
+  mutate(ID = recode(ID, !!!id_map))
+
+# 5️⃣ Supprimer doublons et réordonner les colonnes
+CSSA_wide_unique <- CSSA_wide %>%
+  group_by(ID, Visit) %>%
+  summarise(across(everything(), ~ first(.)), .groups = "drop") %>%
+  select(
+    ID, Visit,
+    CSS_OB_Pain, CSS_OB_Hyperalgesia, CSS_OB_Temperature, CSS_OB_Oedema, 
+    CSS_OB_Erythema, CSS_OB_Sudation, CSS_OB_Trophicity, CSS_OB_Strength,
+    CSS_SUB_Pain, CSS_SUB_Hyperalgesia, CSS_SUB_Temperature, CSS_SUB_Erythema,
+    CSS_SUB_Sudation, CSS_SUB_Oedema, CSS_SUB_Trophicity, CSS_SUB_Strength
+  )
+
+# 6️⃣ Préparer le tableau du tuteur pour comparaison
+binary_cols <- grep("^CSS_", names(CSSG), value = TRUE)
+
+CSSG_long <- CSSG %>%
+  select(ID, Visit, all_of(binary_cols)) %>%
+  pivot_longer(
+    cols = -c(ID, Visit),
+    names_to = "variable",
+    values_to = "tuteur"
+  )
+```
+
+```{r}
+# 7️⃣ Mettre CSSA et CSSG au format long pour comparer
+CSSA_long_for_comparison <- CSSA_wide_unique %>%
+  pivot_longer(
+    cols = -c(ID, Visit),
+    names_to = "variable",
+    values_to = "toi"
+  )
+
+# 8️⃣ Fusionner avec le tableau du tuteur
+comparison <- CSSA_long_for_comparison %>%
+  left_join(CSSG_long, by = c("ID", "Visit", "variable")) %>%
+  mutate(diff = toi != tuteur)  # TRUE si différence
+
+# 9️⃣ Extraire seulement les différences
+diffs <- comparison %>%
+  filter(diff == TRUE) %>%
+  select(ID, Visit, variable, toi, tuteur)
+
+# 10️⃣ Résumé rapide
+n_diffs <- nrow(diffs)  # nombre total de différences
+n_diffs
+
+# 11️⃣ Aperçu des premières différences
+head(diffs)
+
+# 12️⃣ Résumé par ID et Visit : combien de variables diffèrent
+summary_by_ID <- diffs %>%
+  group_by(ID, Visit) %>%
+  summarise(nb_diff = n(), vars_diff = paste(variable, collapse = ", "), .groups = "drop")
+
+summary_by_ID
+```
+
+```{r}
+# Filtrer uniquement pour la première visite
+diffs_V1 <- diffs %>%
+  filter(Visit == 1)
+
+# Nombre total de différences sur V1
+n_diffs_V1 <- nrow(diffs_V1)
+n_diffs_V1
+
+# Aperçu des différences sur V1
+diffs_V1
 ```
 
 
@@ -33,7 +224,6 @@ str(CSSScores)
 summary(CSSScores)
 colnames(CSSScores)
 
-install.packages("psych")
 library(psych)
 describe(CSSScores)
 cols_obj <- grep("Scoreobj", colnames(CSSScores))
@@ -110,6 +300,55 @@ for (v in 1:20) {
   
   print(p)
 }
+```
+
+```{r}
+#Bland Altman with all repeated mesures
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+
+# Passage en format long
+data_long <- CSSScores %>%
+  pivot_longer(
+    cols = -sid,
+    names_to = c("Visit", "Type"),
+    names_pattern = "V(\\d+)_(Scoreobj|Scoresubj)",
+    values_to = "Score"
+  ) %>%
+  pivot_wider(
+    names_from = Type,
+    values_from = Score
+  )
+#bland altman calcul
+data_long <- data_long %>%
+  mutate(
+    mean = (Scoreobj + Scoresubj)/2,
+    diff = Scoreobj - Scoresubj
+  )
+
+#biais et limites d'accord
+mean_diff <- mean(data_long$diff, na.rm = TRUE)
+sd_diff <- sd(data_long$diff, na.rm = TRUE)
+
+lower_limit <- mean_diff - 1.96 * sd_diff
+upper_limit <- mean_diff + 1.96 * sd_diff
+
+# Bland-Altman plot
+ggplot(data_long, aes(x = mean, y = diff, color = sid)) +
+  geom_point(size = 2) +
+  
+  geom_hline(yintercept = mean_diff, linetype = "dashed") +
+  geom_hline(yintercept = lower_limit, linetype = "dashed") +
+  geom_hline(yintercept = upper_limit, linetype = "dashed") +
+  
+  labs(
+    title = "Bland-Altman global (toutes les visites)",
+    x = "Moyenne des scores (Obj & Subj)",
+    y = "Différence (Obj - Subj)",
+    color = "Patient"
+  ) +
+  theme_minimal()
 ```
 
 
