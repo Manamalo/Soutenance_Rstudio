@@ -60,32 +60,6 @@ sum(is.na(CSSA))
 
 
 ```{r}
-# library(dplyr)
-# 
-# # Résumé CSSA
-# CSSA_summary <- CSSA %>%
-#   summarise(across(where(is.numeric), list(
-#     mean = ~ mean(.x, na.rm = TRUE),
-#     median = ~ median(.x, na.rm = TRUE),
-#     sum = ~ sum(.x, na.rm = TRUE)
-#   )))
-# 
-# CSSA_summary  # Afficher le résumé CSSA
-# 
-# # Résumé CSSG
-# CSSG_summary <- CSSG %>%
-#   summarise(across(where(is.numeric), list(
-#     mean = ~ mean(.x, na.rm = TRUE),
-#     median = ~ median(.x, na.rm = TRUE),
-#     sum = ~ sum(.x, na.rm = TRUE)
-#   )))
-# 
-# CSSG_summary  # Afficher le résumé CSSG
-```
-
-
-
-```{r}
 CSSScores <- read.csv("data/df_scores_final.csv", sep=";")
 
 head(CSSScores)
@@ -93,8 +67,6 @@ str(CSSScores)
 summary(CSSScores)
 colnames(CSSScores)
 nrow(CSSScores)
-
-CSSScores <- CSSScores[-c(7, 8, 9), ]
 
 library(psych)
 describe(CSSScores)
@@ -184,15 +156,17 @@ for (v in 1:20) {
   lower_limit <- mean_diff - 1.96*sd_diff
   upper_limit <- mean_diff + 1.96*sd_diff
   
-  # Bland-Altman plot
+    # Bland-Altman plot
+  
   p <- ggplot(CSSScores, aes_string(x = mean_col, y = diff_col)) +
-    geom_point() +
-    geom_hline(yintercept = mean_diff, color = "blue", linetype = "dashed") +
-    geom_hline(yintercept = lower_limit, color = "red", linetype = "dashed") +
-    geom_hline(yintercept = upper_limit, color = "red", linetype = "dashed") +
-    labs(title = paste0("Bland-Altman Plot V", v),
-         x = "Moyenne des scores (Obj & Subj)",
-         y = "Différence des scores (Obj - Subj)")
+  geom_point() +
+  geom_hline(yintercept = mean_diff, color = "blue", linetype = "dashed") +
+  geom_hline(yintercept = lower_limit, color = "red", linetype = "dashed") +
+  geom_hline(yintercept = upper_limit, color = "red", linetype = "dashed") +
+  ylim(-8, 8) +
+  labs(title = paste0("Bland-Altman Plot V", v),
+       x = "Moyenne des scores (Obj & Subj)",
+       y = "Différence des scores (Obj - Subj)")
   
   print(p)
 }
@@ -239,12 +213,13 @@ sd_diff <- sd(data_long$diff, na.rm = TRUE)
 lower_limit <- mean_diff - 1.96 * sd_diff
 upper_limit <- mean_diff + 1.96 * sd_diff
 
-# Bland-Altman plot
+#bland altman plot 
 ggplot(data_long, aes(x = mean, y = diff, color = sid)) +
-  geom_point(size = 2) +
+  geom_point(size = 2, alpha = 0.4) +
   geom_hline(yintercept = mean_diff, linetype = "dashed") +
   geom_hline(yintercept = lower_limit, linetype = "dashed") +
   geom_hline(yintercept = upper_limit, linetype = "dashed") +
+  coord_cartesian(ylim = c(-8, 8)) +
   labs(
     title = "Bland-Altman global (toutes les visites)",
     x = "Moyenne des scores (Obj & Subj)",
@@ -252,6 +227,7 @@ ggplot(data_long, aes(x = mean, y = diff, color = sid)) +
     color = "Patient"
   ) +
   theme_minimal()
+
 ```
 
 
