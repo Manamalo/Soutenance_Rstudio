@@ -1,5 +1,5 @@
 ---
-title: "SDRC_BA"
+title: "Code for RStudio soutenance"
 date: "2026-02-13"
 output:
   html_document:
@@ -7,6 +7,7 @@ output:
 ---
 
 ```{r}
+# Set global chunk options to hide code and messages/warnings by default
 knitr::opts_chunk$set(
   echo = FALSE,
   message = FALSE,
@@ -40,67 +41,104 @@ nrow(CSSScores)
 #check the distribution of scores for each visit with boxplot
 library(psych)
 describe(CSSScores)
+
 cols_obj <- grep("Scoreobj", colnames(CSSScores))
 
 boxplot(CSSScores[, cols_obj],
         las = 2,
         main = "Objective scores",
-        col = "lightgreen")
+        col = "lightgreen",
+        names = paste("Visit", 1:length(cols_obj)),
+        ylim = c(0, 8),
+        yaxt = "n",   # disables automatic y-axis ticks
+        ylab = "CSS severity level")
+axis(2, at = 0:8)  # adds ticks from 0 to 8
+
 cols_subj <- grep("Scoresubj", colnames(CSSScores))
 
 boxplot(CSSScores[, cols_subj],
         las = 2,
         main = "Subjective scores",
-        col = "lightpink")
+        col = "lightpink",
+        names = paste("Visit", 1:length(cols_subj)),
+        ylim = c(0, 8),
+        yaxt = "n",  # disables automatic y-axis ticks
+        ylab = "CSS severity level")
+axis(2, at = 0:8)  # adds ticks from 0 to 8
+
 ```
 
 
 ```{r, echo=TRUE}
-#bland Altman for V1
 
-#create mean and difference columns for V1
-CSSScores$V1_mean <- (CSSScores$V1_Scoreobj + CSSScores$V1_Scoresubj)/2
-CSSScores$V1_diff <- CSSScores$V1_Scoreobj - CSSScores$V1_Scoresubj
+#descriptive statistics with a table for HTML document
+library(dplyr)
+library(tidyr)
+library(stringr)
 
-# Bias and SD of differences 
-mean_diff <- mean(CSSScores$V1_diff, na.rm = TRUE)
-sd_diff <- sd(CSSScores$V1_diff, na.rm = TRUE)
-
-# Limits of agreement
-lower_limit <- mean_diff - 1.96*sd_diff
-upper_limit <- mean_diff + 1.96*sd_diff
-
-# Plot with ggplot
-library(ggplot2)
-
-ggplot(CSSScores, aes(x = V1_mean, y = V1_diff)) +
-  geom_point() +
-  geom_hline(yintercept = mean_diff, color = "blue", linetype = "dashed") +
-  geom_hline(yintercept = lower_limit, color = "red", linetype = "dashed") +
-  geom_hline(yintercept = upper_limit, color = "red", linetype = "dashed") +
-  labs(title = "Bland-Altman Plot V1",
-       x = "Score mean (Obj & Subj)",
-       y = "Score difference (Obj - Subj)")
+CSSScores %>%
+  select(-sid) %>%
+  summarise(across(everything(),
+                   list(mean = mean, sd = sd))) %>%
+  pivot_longer(everything(),
+               names_to = "var",
+               values_to = "value") %>%
+  separate(var, into = c("visit", "type", "stat"), sep = "_") %>%
+  pivot_wider(names_from = c(type, stat),
+              values_from = value) %>%
+  arrange(visit)
 ```
 
+
 ```{r, echo=TRUE}
-#check the normality of difference distribution for each visit
-# loop for all visits
-for (v in 1:20) {
-  diff_col <- paste0("V", v, "_diff")
-  
-  # check if column exists (if some visits are missing)
-  if(diff_col %in% colnames(CSSScores)) {
-    
-    # Shapiro-Wilk test
-    shapiro_test <- shapiro.test(CSSScores[[diff_col]])
-    print(shapiro_test)
-    
-    # QQ-plot
-    qqnorm(CSSScores[[diff_col]], main = paste("QQ-plot Visit", v))
-    qqline(CSSScores[[diff_col]], col = "red")
-  }
-}
+# #bland Altman for V1
+# 
+# #create mean and difference columns for V1
+# CSSScores$V1_mean <- (CSSScores$V1_Scoreobj + CSSScores$V1_Scoresubj)/2
+# CSSScores$V1_diff <- CSSScores$V1_Scoreobj - CSSScores$V1_Scoresubj
+# 
+# # Bias and SD of differences 
+# mean_diff <- mean(CSSScores$V1_diff, na.rm = TRUE)
+# sd_diff <- sd(CSSScores$V1_diff, na.rm = TRUE)
+# 
+# # Limits of agreement
+# lower_limit <- mean_diff - 1.96*sd_diff
+# upper_limit <- mean_diff + 1.96*sd_diff
+# 
+# # Plot with ggplot
+# library(ggplot2)
+# 
+# ggplot(CSSScores, aes(x = V1_mean, y = V1_diff)) +
+#   geom_point() +
+#   geom_hline(yintercept = mean_diff, color = "blue", linetype = "dashed") +
+#   geom_hline(yintercept = lower_limit, color = "red", linetype = "dashed") +
+#   geom_hline(yintercept = upper_limit, color = "red", linetype = "dashed") +
+#   labs(title = "Bland-Altman Plot V1",
+#        x = "Score mean (Obj & Subj)",
+#        y = "Score difference (Obj - Subj)")
+```
+
+
+
+
+```{r, echo=TRUE}
+# #check the normality of difference distribution for each visit
+# # loop for all visits
+# for (v in 1:20) {
+#   diff_col <- paste0("V", v, "_diff")
+#   
+#   # check if column exists (if some visits are missing)
+#   if(diff_col %in% colnames(CSSScores)) {
+#     
+#     # Shapiro-Wilk test
+#     shapiro_test <- shapiro.test(CSSScores[[diff_col]])
+#     print(shapiro_test)
+#     
+#     # QQ-plot
+#     qqnorm(CSSScores[[diff_col]], main = paste("QQ-plot Visit", v))
+#     qqline(CSSScores[[diff_col]], col = "red")
+#   }
+# }
 ```
 
 
@@ -163,13 +201,15 @@ for (v in 1:20) {
   upper_limit <- mean_diff + 1.96 * sd_diff
 
   plot(
-    CSSScores[[mean_col]],
-    CSSScores[[diff_col]],
-    main = paste("V", v),
-    xlab = "Mean",
-    ylab = "Diff",
-    pch = 16
-  )
+  CSSScores[[mean_col]],
+  CSSScores[[diff_col]],
+  main = paste("V", v),
+  xlab = "Mean",
+  ylab = "Diff",
+  pch = 16,
+  xlim = c(0, 8),
+  ylim = c(-8, 8)
+)
 
   abline(h = mean_diff, col = "blue", lty = 2)
   abline(h = lower_limit, col = "red", lty = 2)
@@ -230,11 +270,14 @@ upper_limit <- mean_diff + 1.96 * sd_diff
 
 #bland altman plot for all visits combined
 ggplot(data_long, aes(x = mean, y = diff, color = sid)) +
-  geom_point(size = 2, alpha = 0.4) +
-  geom_hline(yintercept = mean_diff, linetype = "dashed") +
-  geom_hline(yintercept = lower_limit, linetype = "dashed") +
-  geom_hline(yintercept = upper_limit, linetype = "dashed") +
-  coord_cartesian(ylim = c(-8, 8)) +
+  geom_count(alpha = 0.7) +
+  geom_hline(yintercept = mean_diff, color = "blue", linetype = "dashed") +
+  geom_hline(yintercept = lower_limit, color = "red", linetype = "dashed") +
+  geom_hline(yintercept = upper_limit, color = "red", linetype = "dashed") +
+  coord_cartesian(ylim = c(-8, 8), xlim = c(0, 8)) +
+
+scale_y_continuous(breaks = seq(-8, 8, 1)) +
+scale_x_continuous(breaks = seq(0, 8, 1))  +
   labs(
     title = "Classic Bland-Altman for all visits combined",
     x = "Scores Mean (Obj & Subj)",
@@ -246,19 +289,54 @@ ggplot(data_long, aes(x = mean, y = diff, color = sid)) +
 ```
 
 ```{r, echo=TRUE}
-#non parametric Bland Altman for all visits combined 
+# #non parametric Bland Altman with baplot for all visits combined 
+# 
+# library(MKinfer)
+# 
+# # set axis limits
+# par(xlim = c(0, 8), ylim = c(-8, 8))
+# 
+# # Nonparametric Bland-Altman plot for all visits combined
+# baplot(
+#   x = data_long$Scoreobj,
+#   y = data_long$Scoresubj,
+#   type = "nonparametric",
+#   xlab = "Mean score (objective and subjective)",
+#   ylab = "Score difference (objective - subjective)",
+#   title = "Nonparametric Bland-Altman Plot for all visits combined"
+# )
 
-library(MKinfer)
+```
 
-# Nonparametric Bland-Altman plot for all visits combined
-baplot(
-  x = data_long$Scoreobj,
-  y = data_long$Scoresubj,
-  type = "nonparametric",
-  xlab = "Mean score (objective and subjective)",
-  ylab = "Score difference (objective - subjective)",
-  title = "Nonparametric Bland-Altman Plot for all visits combined"
-)
+```{r, echo=TRUE}
+#non parametric bland Altman with ggplot for all visits combined
+library(dplyr)
+library(ggplot2)
+
+# calcul non paramétrique
+ba_np <- data_long %>%
+  mutate(diff = Scoreobj - Scoresubj,
+         mean = (Scoreobj + Scoresubj)/2) %>%
+  summarise(
+    median_diff = median(diff, na.rm = TRUE),
+    lower_limit = quantile(diff, 0.025, na.rm = TRUE),
+    upper_limit = quantile(diff, 0.975, na.rm = TRUE)
+  )
+
+# plot avec ggplot
+ggplot(data_long, aes(x = (Scoreobj + Scoresubj)/2, y = Scoreobj - Scoresubj)) +
+  geom_count(aes(color = sid), alpha = 0.7) +
+  geom_hline(yintercept = ba_np$median_diff, color = "blue", linetype = "dashed", size = 1) +
+  geom_hline(yintercept = ba_np$lower_limit, color = "red", linetype = "dashed", size = 1) +
+  geom_hline(yintercept = ba_np$upper_limit, color = "red", linetype = "dashed", size = 1) +
+  scale_x_continuous(limits = c(0, 8), breaks = 0:8) +
+  scale_y_continuous(limits = c(-8, 8), breaks = seq(-8, 8, 1)) +
+  labs(
+    title = "Nonparametric Bland-Altman Plot (all visits combined)",
+    x = "Mean score (objective and subjective)",
+    y = "Score difference (objective - subjective)"
+  ) +
+  theme_minimal()
 ```
 
 
@@ -288,10 +366,14 @@ upper_limit_re <- mean_diff_re + 1.96 * sd_total
 
 # Plot Bland-Altman with random effects
 ggplot(data_long, aes(x = mean, y = diff, color = sid)) +
-  geom_point(alpha = 0.4) +
+  geom_count(alpha = 0.7) +
   geom_hline(yintercept = mean_diff_re, color = "blue", linetype = "dashed") +
   geom_hline(yintercept = lower_limit_re, color = "red", linetype = "dashed") +
   geom_hline(yintercept = upper_limit_re, color = "red", linetype = "dashed") +
+  coord_cartesian(ylim = c(-8, 8), xlim = c(0, 8)) +
+
+scale_y_continuous(breaks = seq(-8, 8, 1)) +
+scale_x_continuous(breaks = seq(0, 8, 1)) +
   labs(
     title = "Bland-Altman Plot with Random Effects for all visits combined",
     x = "Mean score (objective and subjective)",
@@ -329,10 +411,14 @@ upper_limit_re <- mean_diff_re + 1.96 * sd_total
 
 # Plot Bland-Altman with random effects
 ggplot(data_long, aes(x = mean, y = diff, color = sid)) +
-  geom_point(alpha = 0.4) +
+  geom_count(alpha = 0.7) +
   geom_hline(yintercept = mean_diff_re, color = "blue", linetype = "dashed") +
   geom_hline(yintercept = lower_limit_re, color = "red", linetype = "dashed") +
   geom_hline(yintercept = upper_limit_re, color = "red", linetype = "dashed") +
+  coord_cartesian(ylim = c(-8, 8), xlim = c(0, 8)) +
+
+scale_y_continuous(breaks = seq(-8, 8, 1)) +
+scale_x_continuous(breaks = seq(0, 8, 1)) +
   labs(
     title = "Bland-Altman Plot without outliers for all visits combined",
     x = "Mean score (objective and subjective)",
@@ -373,19 +459,37 @@ ba_results <- ba_results %>%
 
 
 # 2. Nonparametric Bland-Altman
+# 2. Nonparametric Bland-Altman (updated with geom_count style)
 
-# Compute median and 2.5% - 97.5% percentiles manually
-median_diff <- median(data_long$diff, na.rm = TRUE)
-lower_np <- quantile(data_long$diff, 0.025, na.rm = TRUE)
-upper_np <- quantile(data_long$diff, 0.975, na.rm = TRUE)
+ba_np <- data_long %>%
+  mutate(diff = Scoreobj - Scoresubj,
+         mean = (Scoreobj + Scoresubj)/2) %>%
+  summarise(
+    median_diff = median(diff, na.rm = TRUE),
+    lower_limit = quantile(diff, 0.025, na.rm = TRUE),
+    upper_limit = quantile(diff, 0.975, na.rm = TRUE)
+  )
 
 ba_results <- ba_results %>%
   add_row(
     Method = "Nonparametric",
-    Bias = median_diff,
-    Lower_LoA = lower_np,
-    Upper_LoA = upper_np
+    Bias = ba_np$median_diff,
+    Lower_LoA = ba_np$lower_limit,
+    Upper_LoA = ba_np$upper_limit
   )
+
+# Compute median and 2.5% - 97.5% percentiles manually
+# median_diff <- median(data_long$diff, na.rm = TRUE)
+# lower_np <- quantile(data_long$diff, 0.025, na.rm = TRUE)
+# upper_np <- quantile(data_long$diff, 0.975, na.rm = TRUE)
+# 
+# ba_results <- ba_results %>%
+#   add_row(
+#     Method = "Nonparametric",
+#     Bias = median_diff,
+#     Lower_LoA = lower_np,
+#     Upper_LoA = upper_np
+#   )
 
 
 # 3. Bland-Altman with Random Effects
