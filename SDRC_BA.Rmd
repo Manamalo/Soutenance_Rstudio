@@ -15,18 +15,7 @@ knitr::opts_chunk$set(
 )
 ```
 
-
-```{r read_CSSA, echo=TRUE, results='hide', message=FALSE, warning=FALSE, class.source="foldable"}
-#read csv 
-CSSA <- read.csv("data/df_binarise_final.csv", sep=";")
-
-#check the structure
-head(CSSA)
-str(CSSA)
-summary(CSSA)
-colnames(CSSA)
-sum(is.na(CSSA))
-```
+# Descriptive analysis
 
 ```{r read_CSSScores, echo=TRUE, results='hide', message=FALSE, warning=FALSE, class.source="foldable"}
 #read csv check the structure and descriptive statistics 
@@ -38,56 +27,161 @@ summary(CSSScores)
 colnames(CSSScores)
 nrow(CSSScores)
 
-#check the distribution of scores for each visit with boxplot
-library(psych)
-describe(CSSScores)
+# #check the distribution of scores for each visit with boxplot
+# library(psych)
+# describe(CSSScores)
+# 
+# cols_obj <- grep("Scoreobj", colnames(CSSScores))
+# 
+# boxplot(CSSScores[, cols_obj],
+#         las = 2,
+#         main = "Objective scores",
+#         col = "lightgreen",
+#         names = paste("Visit", 1:length(cols_obj)),
+#         ylim = c(0, 8),
+#         yaxt = "n",   # disables automatic y-axis ticks
+#         ylab = "CSS severity level")
+# axis(2, at = 0:8)  # adds ticks from 0 to 8
+# 
+# cols_subj <- grep("Scoresubj", colnames(CSSScores))
+# 
+# boxplot(CSSScores[, cols_subj],
+#         las = 2,
+#         main = "Subjective scores",
+#         col = "lightpink",
+#         names = paste("Visit", 1:length(cols_subj)),
+#         ylim = c(0, 8),
+#         yaxt = "n",  # disables automatic y-axis ticks
+#         ylab = "CSS severity level")
+# axis(2, at = 0:8)  # adds ticks from 0 to 8
 
-cols_obj <- grep("Scoreobj", colnames(CSSScores))
-
-boxplot(CSSScores[, cols_obj],
-        las = 2,
-        main = "Objective scores",
-        col = "lightgreen",
-        names = paste("Visit", 1:length(cols_obj)),
-        ylim = c(0, 8),
-        yaxt = "n",   # disables automatic y-axis ticks
-        ylab = "CSS severity level")
-axis(2, at = 0:8)  # adds ticks from 0 to 8
-
-cols_subj <- grep("Scoresubj", colnames(CSSScores))
-
-boxplot(CSSScores[, cols_subj],
-        las = 2,
-        main = "Subjective scores",
-        col = "lightpink",
-        names = paste("Visit", 1:length(cols_subj)),
-        ylim = c(0, 8),
-        yaxt = "n",  # disables automatic y-axis ticks
-        ylab = "CSS severity level")
-axis(2, at = 0:8)  # adds ticks from 0 to 8
 
 ```
+```{r, echo=TRUE}
+
+library(ggplot2)
+library(dplyr)
+library(tidyr)
+
+#  Define score columns
+
+cols_obj <- grep("Scoreobj", colnames(CSSScores), value = TRUE)
+cols_subj <- grep("Scoresubj", colnames(CSSScores), value = TRUE)
+
+
+# Ensure numeric columns
+
+CSSScores <- CSSScores %>%
+  mutate(across(all_of(cols_obj), as.numeric),
+         across(all_of(cols_subj), as.numeric))
+
+
+# Compute mean score per patient
+
+patient_means <- CSSScores %>%
+  rowwise() %>%
+  mutate(
+    mean_obj  = mean(c_across(all_of(cols_obj)), na.rm = TRUE),
+    mean_subj = mean(c_across(all_of(cols_subj)), na.rm = TRUE)
+  ) %>%
+  ungroup() %>%
+  select(sid, mean_obj, mean_subj) %>%
+  pivot_longer(cols = c(mean_obj, mean_subj),
+               names_to = "Type",
+               values_to = "MeanScore") %>%
+  mutate(Type = ifelse(Type == "mean_obj", "Objective", "Subjective"))
+
+
+#Boxplot comparing mean scores per patient
+
+ggplot(patient_means, aes(x = Type, y = MeanScore, fill = Type)) +
+  geom_boxplot(alpha = 0.6) +
+  geom_jitter(width = 0.1, alpha = 0.5, color = "black") +  # show individual patient points
+  scale_fill_manual(values = c("Objective" = "lightgreen", "Subjective" = "lightpink")) +
+  labs(title = "Comparison of Mean CSS Scores",
+       x = "Score Type",
+       y = "Mean CSS Score") +
+  theme_minimal()
+
+
+# Prepare density data
+
+# Objective scores
+df_obj <- CSSScores %>%
+  select(all_of(cols_obj)) %>%
+  mutate(ID = row_number()) %>%
+  pivot_longer(cols = -ID,
+               names_to = "Visit",
+               values_to = "Score") %>%
+  mutate(Type = "Objective")
+
+# Subjective scores
+df_subj <- CSSScores %>%
+  select(all_of(cols_subj)) %>%
+  mutate(ID = row_number()) %>%
+  pivot_longer(cols = -ID,
+               names_to = "Visit",
+               values_to = "Score") %>%
+  mutate(Type = "Subjective")
+
+# Combine
+df_all <- bind_rows(df_obj, df_subj)
+
+
+# Density plot
+
+ggplot(df_all, aes(x = Score, color = Type, fill = Type)) +
+  geom_density(alpha = 0.3) +
+  scale_color_manual(values = c("Objective" = "lightgreen", "Subjective" = "lightpink")) +
+  scale_fill_manual(values = c("Objective" = "lightgreen", "Subjective" = "lightpink")) +
+  xlim(0, 8) +
+  labs(title = "Density of CSS Scores",
+       x = "CSS severity level",
+       y = "Density") +
+  theme_minimal()
+```
+
+```{r, echo=TRUE}
+#numeric descriptive statistics 
+stats_summary <- patient_means %>%
+  group_by(Type) %>%
+  summarise(
+    n = n(),
+    mean = mean(MeanScore, na.rm = TRUE),
+    sd = sd(MeanScore, na.rm = TRUE),
+    median = median(MeanScore, na.rm = TRUE),
+    Q1 = quantile(MeanScore, 0.25, na.rm = TRUE),
+    Q3 = quantile(MeanScore, 0.75, na.rm = TRUE),
+    min = min(MeanScore, na.rm = TRUE),
+    max = max(MeanScore, na.rm = TRUE)
+  )
+
+stats_summary
+```
+
 
 
 ```{r, echo=TRUE}
 
-#descriptive statistics with a table for HTML document
-library(dplyr)
-library(tidyr)
-library(stringr)
 
-CSSScores %>%
-  select(-sid) %>%
-  summarise(across(everything(),
-                   list(mean = mean, sd = sd))) %>%
-  pivot_longer(everything(),
-               names_to = "var",
-               values_to = "value") %>%
-  separate(var, into = c("visit", "type", "stat"), sep = "_") %>%
-  pivot_wider(names_from = c(type, stat),
-              values_from = value) %>%
-  arrange(visit)
+# #descriptive statistics with a table for HTML document
+# library(dplyr)
+# library(tidyr)
+# library(stringr)
+# 
+# CSSScores %>%
+#   select(-sid) %>%
+#   summarise(across(everything(),
+#                    list(mean = mean, sd = sd))) %>%
+#   pivot_longer(everything(),
+#                names_to = "var",
+#                values_to = "value") %>%
+#   separate(var, into = c("visit", "type", "stat"), sep = "_") %>%
+#   pivot_wider(names_from = c(type, stat),
+#               values_from = value) %>%
+#   arrange(visit)
 ```
+
 
 
 ```{r, echo=TRUE}
@@ -179,42 +273,46 @@ CSSScores %>%
 # }
 ```
 
+# Bland Altman
+
 ```{r ba_each_visit, fig.width=10, fig.height=8, echo=TRUE}
 
-#bland altman for each visit with plot instead of ggplot for html document
-
-par(mfrow = c(4, 5))   
-
-for (v in 1:20) {
-
-  obj_col <- paste0("V", v, "_Scoreobj")
-  subj_col <- paste0("V", v, "_Scoresubj")
-  mean_col <- paste0("V", v, "_mean")
-  diff_col <- paste0("V", v, "_diff")
-  
-  CSSScores[[mean_col]] <- (CSSScores[[obj_col]] + CSSScores[[subj_col]]) / 2
-  CSSScores[[diff_col]] <- CSSScores[[obj_col]] - CSSScores[[subj_col]]
-  
-  mean_diff <- mean(CSSScores[[diff_col]], na.rm = TRUE)
-  sd_diff <- sd(CSSScores[[diff_col]], na.rm = TRUE)
-  lower_limit <- mean_diff - 1.96 * sd_diff
-  upper_limit <- mean_diff + 1.96 * sd_diff
-
-  plot(
-  CSSScores[[mean_col]],
-  CSSScores[[diff_col]],
-  main = paste("V", v),
-  xlab = "Mean",
-  ylab = "Diff",
-  pch = 16,
-  xlim = c(0, 8),
-  ylim = c(-8, 8)
-)
-
-  abline(h = mean_diff, col = "blue", lty = 2)
-  abline(h = lower_limit, col = "red", lty = 2)
-  abline(h = upper_limit, col = "red", lty = 2)
-}
+# #bland altman for each visit with plot instead of ggplot for html document
+# 
+# par(mfrow = c(4, 5))   
+# 
+# for (v in 1:20) {
+# 
+#   obj_col <- paste0("V", v, "_Scoreobj")
+#   subj_col <- paste0("V", v, "_Scoresubj")
+#   mean_col <- paste0("V", v, "_mean")
+#   diff_col <- paste0("V", v, "_diff")
+#   
+#   CSSScores[[mean_col]] <- (CSSScores[[obj_col]] + CSSScores[[subj_col]]) / 2
+#   CSSScores[[diff_col]] <- CSSScores[[obj_col]] - CSSScores[[subj_col]]
+#   
+#   mean_diff <- mean(CSSScores[[diff_col]], na.rm = TRUE)
+#   sd_diff <- sd(CSSScores[[diff_col]], na.rm = TRUE)
+#   lower_limit <- mean_diff - 1.96 * sd_diff
+#   upper_limit <- mean_diff + 1.96 * sd_diff
+# 
+#   plot(
+#   CSSScores[[mean_col]],
+#   CSSScores[[diff_col]],
+#   main = paste("V", v),
+#   xlab = "Mean",
+#   ylab = "Diff",
+#   pch = 16,
+#   xlim = c(0, 8),
+#   ylim = c(-8, 8)
+# )
+# 
+#   abline(h = mean_diff, col = "blue", lty = 2)
+#   abline(h = lower_limit, col = "red", lty = 2)
+#   abline(h = upper_limit, col = "red", lty = 2)
+# }
+# 
+# mtext("Bland Altman for each visit", outer = TRUE, cex = 1.5, line = -2)
 
 ```
 
@@ -241,21 +339,6 @@ data_long <- CSSScores %>%
     diff = Scoreobj - Scoresubj
   )
 ```
-
-
-
-```{r, echo=TRUE}
-#check the normality of difference distribution for all visits combined
-
-# Shapiro-Wilk for all visits combined
-shapiro_test_global <- shapiro.test(data_long$diff)
-print(shapiro_test_global)
-
-# QQ-plot for all visits combined
-qqnorm(data_long$diff, main = "QQ-plot global differences")
-qqline(data_long$diff, col = "red") 
-```
-
 
 ```{r, echo=TRUE}
 #Classic Bland Altman for all visits combined
@@ -285,7 +368,19 @@ scale_x_continuous(breaks = seq(0, 8, 1))  +
     color = "Patient"
   ) +
   theme_minimal()
+```
 
+
+```{r, echo=TRUE}
+#check the normality of difference distribution for all visits combined
+
+# Shapiro-Wilk for all visits combined
+shapiro_test_global <- shapiro.test(data_long$diff)
+print(shapiro_test_global)
+
+# QQ-plot for all visits combined
+qqnorm(data_long$diff, main = "QQ-plot global differences")
+qqline(data_long$diff, col = "red") 
 ```
 
 ```{r, echo=TRUE}
@@ -326,15 +421,16 @@ ba_np <- data_long %>%
 # plot avec ggplot
 ggplot(data_long, aes(x = (Scoreobj + Scoresubj)/2, y = Scoreobj - Scoresubj)) +
   geom_count(aes(color = sid), alpha = 0.7) +
-  geom_hline(yintercept = ba_np$median_diff, color = "blue", linetype = "dashed", size = 1) +
-  geom_hline(yintercept = ba_np$lower_limit, color = "red", linetype = "dashed", size = 1) +
-  geom_hline(yintercept = ba_np$upper_limit, color = "red", linetype = "dashed", size = 1) +
+  geom_hline(yintercept = ba_np$median_diff, color = "blue", linetype = "dashed") +
+  geom_hline(yintercept = ba_np$lower_limit, color = "red", linetype = "dashed") +
+  geom_hline(yintercept = ba_np$upper_limit, color = "red", linetype = "dashed") +
   scale_x_continuous(limits = c(0, 8), breaks = 0:8) +
   scale_y_continuous(limits = c(-8, 8), breaks = seq(-8, 8, 1)) +
   labs(
     title = "Nonparametric Bland-Altman Plot (all visits combined)",
     x = "Mean score (objective and subjective)",
-    y = "Score difference (objective - subjective)"
+    y = "Score difference (objective - subjective)",
+    color = "Patient"
   ) +
   theme_minimal()
 ```
@@ -386,10 +482,9 @@ scale_x_continuous(breaks = seq(0, 8, 1)) +
 
 
 ```{r, echo=TRUE}
-#Bland Altman without outliers for all visits combined
-library(lme4)
-library(dplyr)
 library(ggplot2)
+library(dplyr)
+library(lme4)
 
 # Fit a mixed-effects model on the differences (random intercept per patient)
 model_re <- lmer(diff ~ 1 + (1 | sid), data = data_long)
@@ -397,33 +492,65 @@ model_re <- lmer(diff ~ 1 + (1 | sid), data = data_long)
 # Extract the fixed effect (overall mean difference = bias)
 mean_diff_re <- fixef(model_re)[1]
 
-# Extract variance components (between-subject and within-subject variability)
-var_components <- as.data.frame(VarCorr(model_re))
-var_between <- var_components$vcov[var_components$grp == "sid"]
-var_within <- attr(VarCorr(model_re), "sc")^2
 
-# Compute total standard deviation
-sd_total <- sqrt(var_between + var_within)
+# Define the minimal clinical threshold (instead of 1.96*SD)
+clinical_threshold <- 2.5
 
-# Compute limits of agreement
-lower_limit_re <- mean_diff_re - 1.96 * sd_total
-upper_limit_re <- mean_diff_re + 1.96 * sd_total
+# Compute Bland-Altman limits using the clinical threshold
+lower_limit_clinical <- mean_diff_re - clinical_threshold
+upper_limit_clinical <- mean_diff_re + clinical_threshold
 
-# Plot Bland-Altman with random effects
+# Classic Bland-Altman limits (±1.96 SD)
+sd_diff <- sd(data_long$diff)
+lower_limit_sd <- mean_diff_re - 1.96 * sd_diff
+upper_limit_sd <- mean_diff_re + 1.96 * sd_diff
+
+# Clinical threshold (SRD)
+threshold <- 2.5
+
+# Total number of observations
+n_total <- nrow(data_long)
+
+# Number of observations outside the acceptable range (±2.5)
+n_outside <- sum(abs(data_long$diff) > threshold)
+
+# Percentage outside the acceptable range
+pct_outside <- (n_outside / n_total) * 100
+
+# Breakdown: negative vs positive differences
+n_negative <- sum(data_long$diff < -threshold)
+n_positive <- sum(data_long$diff > threshold)
+
+pct_negative <- (n_negative / n_total) * 100
+pct_positive <- (n_positive / n_total) * 100
+
+# Display results
+pct_outside
+pct_negative
+pct_positive
+
+
+# Plot Bland-Altman with clinical threshold
 ggplot(data_long, aes(x = mean, y = diff, color = sid)) +
   geom_count(alpha = 0.7) +
   geom_hline(yintercept = mean_diff_re, color = "blue", linetype = "dashed") +
-  geom_hline(yintercept = lower_limit_re, color = "red", linetype = "dashed") +
-  geom_hline(yintercept = upper_limit_re, color = "red", linetype = "dashed") +
-  coord_cartesian(ylim = c(-8, 8), xlim = c(0, 8)) +
+ 
+  # Use clinical threshold for lower and upper limits
+geom_hline(yintercept = lower_limit_clinical, color = "green", linetype = "solid") +
+geom_hline(yintercept = upper_limit_clinical, color = "green", linetype = "solid") +
+  
+  # 1.96 SD limits 
+geom_hline(yintercept = lower_limit_sd, color = "red", linetype = "dashed") +
+geom_hline(yintercept = upper_limit_sd, color = "red", linetype = "dashed") +
 
-scale_y_continuous(breaks = seq(-8, 8, 1)) +
-scale_x_continuous(breaks = seq(0, 8, 1)) +
+  coord_cartesian(ylim = c(-8, 8), xlim = c(0, 8)) +
+  scale_y_continuous(breaks = seq(-8, 8, 1)) +
+  scale_x_continuous(breaks = seq(0, 8, 1)) +
   labs(
-    title = "Bland-Altman Plot without outliers for all visits combined",
+    title = "Bland-Altman Plot with clinical threshold of ±2.5",
     x = "Mean score (objective and subjective)",
     y = "Score difference (objective - subjective)",
-    color = "Patient" 
+    color = "Patient"
   ) +
   theme_minimal()
 ```
@@ -459,7 +586,6 @@ ba_results <- ba_results %>%
 
 
 # 2. Nonparametric Bland-Altman
-# 2. Nonparametric Bland-Altman (updated with geom_count style)
 
 ba_np <- data_long %>%
   mutate(diff = Scoreobj - Scoresubj,
@@ -513,28 +639,18 @@ ba_results <- ba_results %>%
   )
 
 
-# 4. Bland-Altman without Outliers
+# 4. Bland-Altman with Clinical Threshold ±2.5
 
-Q1 <- quantile(data_long$diff, 0.25, na.rm = TRUE)
-Q3 <- quantile(data_long$diff, 0.75, na.rm = TRUE)
-IQR_val <- Q3 - Q1
-lower_bound <- Q1 - 1.5 * IQR_val
-upper_bound <- Q3 + 1.5 * IQR_val
-
-data_no_outliers <- data_long %>%
-  filter(diff >= lower_bound & diff <= upper_bound)
-
-mean_diff_no <- mean(data_no_outliers$diff, na.rm = TRUE)
-sd_diff_no <- sd(data_no_outliers$diff, na.rm = TRUE)
-lower_no <- mean_diff_no - 1.96 * sd_diff_no
-upper_no <- mean_diff_no + 1.96 * sd_diff_no
+clinical_threshold <- 2.5
+lower_clinical <- mean_diff_re - clinical_threshold
+upper_clinical <- mean_diff_re + clinical_threshold
 
 ba_results <- ba_results %>%
   add_row(
-    Method = "Without Outliers",
-    Bias = mean_diff_no,
-    Lower_LoA = lower_no,
-    Upper_LoA = upper_no
+    Method = "Clinical Threshold ±2.5",
+    Bias = mean_diff_re,
+    Lower_LoA = lower_clinical,
+    Upper_LoA = upper_clinical
   )
 
 
@@ -542,6 +658,184 @@ ba_results <- ba_results %>%
 
 ba_results %>% 
   arrange(Method)
+
+#table for publication
+
+library(knitr)
+
+ba_results %>%
+  arrange(Method) %>%
+  kable(
+    digits = 2,                  # rounded to 2 decimal places
+    col.names = c("Method", "Bias", "Lower Limit", "Upper Limit"),
+    caption = "Comparison of methods Bland-Altman"
+  )
+```
+#Cohen's Kappa
+
+```{r read_CSSA, echo=TRUE, results='hide', message=FALSE, warning=FALSE, class.source="foldable"}
+#read csv 
+CSSA <- read.csv("data/df_binarise_final.csv", sep=";")
+
+#check the structure
+# head(CSSA)
+# str(CSSA)
+# summary(CSSA)
+#colnames(CSSA)
+# sum(is.na(CSSA))
+```
+
+
+```{r, echo=TRUE}
+
+#Cohen's Kappa for pain only
+library(dplyr)
+library(irr)
+
+# Initialize dataframe for stock results
+kappa_results <- data.frame()
+
+# Visit lists
+visits <- paste0("v", 1:20) # adapte si tu as moins de 20 visites
+
+for(v in visits){
+
+  # Caregiver = "_cssdoul", Patient = "_css2"
+  col_soignant <- paste0(v, "_cssdoul")
+  col_patient  <- paste0(v, "_css2")
+
+  # Check if columns exist to avoid errors
+  if(all(c(col_soignant, col_patient) %in% colnames(CSSA))){
+    
+    # check variations to avoid NaNs
+    vals <- CSSA[, c(col_soignant, col_patient)]
+    if(length(unique(vals[[1]])) > 1 && length(unique(vals[[2]])) > 1){
+      k <- kappa2(vals)
+      kappa_results <- rbind(kappa_results,
+                             data.frame(visit = v,
+                                        kappa = k$value,
+                                        z = k$statistic,
+                                        p = k$p.value))
+    } else {
+      kappa_results <- rbind(kappa_results,
+                             data.frame(visit = v,
+                                        kappa = NA,
+                                        z = NA,
+                                        p = NA))
+    }
+  }
+}
+
+kappa_results
+```
+```{r, echo=TRUE}
+#Cohen's kappa for all items
+library(dplyr)
+library(irr)
+library(ggplot2)
+
+# Define mapping of items to columns (soignant = clinician, patient = patient)
+item_map <- list(
+  Pain      = c("cssdoul", "css2"),
+  Hyperalgesia = c("csshypall", "css3"),
+  Temperature  = c("csstemp", "css4"),
+  Erythema     = c("csseryth", "css5"),
+  Sweating     = c("csssud", "css6"),
+  Edema       = c("cssoed", "css7"),
+  Trophicity   = c("csstroph", "css8"),
+  Strength        = c("cssforcemoy", "css9")
+)
+
+# All visits
+visits <- paste0("v", 1:20) 
+
+# Initialize results dataframe
+kappa_results <- data.frame()
+
+# Loop through each item and each visit
+for(item_name in names(item_map)){
+  cols <- item_map[[item_name]]  # clinician and patient columns
+  for(v in visits){
+    clinician_col <- grep(paste0("^", v, "_", cols[1], "$"), colnames(CSSA), value = TRUE)
+    patient_col   <- grep(paste0("^", v, "_", cols[2], "$"), colnames(CSSA), value = TRUE)
+    
+    if(length(clinician_col) == 1 & length(patient_col) == 1){
+      k <- kappa2(CSSA[, c(clinician_col, patient_col)])
+      kappa_results <- rbind(kappa_results,
+                             data.frame(
+                               item  = item_name,
+                               visit = v,
+                               kappa = k$value,
+                               z     = k$statistic,
+                               p     = k$p.value
+                             ))
+    }
+  }
+}
+
+kappa_results
+
+
+#transform visit in numeric for plotting
+kappa_results$visit <- factor(kappa_results$visit, levels = paste0("v", 1:20))
+
+# Plot Cohen's Kappa over time for each item
+# Fix order of visits
+kappa_results$visit <- factor(kappa_results$visit, levels = paste0("v", 1:20))
+
+# Plot
+ggplot(kappa_results, aes(x = visit, y = kappa, group = item, color = item)) +
+  geom_line() +
+  geom_point() +
+  theme_minimal() +
+  labs(title = "Inter-rater Agreement (Cohen's Kappa) per Item",
+       x = "Visit", y = "Cohen's Kappa")
+
+# Compute average Kappa per item if stable over time
+kappa_avg <- kappa_results %>%
+   filter(item != "Strength") %>%  
+  group_by(item) %>%
+  summarize(mean_kappa = mean(kappa, na.rm = TRUE))
+
+kappa_avg
+
+
+#average plot
+ggplot(kappa_avg, aes(x = reorder(item, mean_kappa), y = mean_kappa, fill = item)) +
+  geom_bar(stat = "identity") +
+  coord_flip() +
+  geom_hline(yintercept = c(0, 0.2, 0.4, 0.6, 0.8), linetype = "dashed", color = "grey") +
+  theme_minimal() +
+  labs(title = "Average Cohen's Kappa per Item",
+       x = "Item",
+       y = "Mean Kappa") +
+  theme(legend.position = "none")
+
+```
+```{r, echo=TRUE}
+#there is a problem with strength item
+#check why strength is not interpretable
+for(v in 1:20){
+  col_clin <- paste0("v", v, "_cssforcemoy")
+  col_pat  <- paste0("v", v, "_css9")
+  
+  if(all(c(col_clin, col_pat) %in% colnames(CSSA))){
+    cat("\nVisit:", v, "\n")
+    cat("Clinician unique values:", unique(CSSA[[col_clin]]), "\n")
+    cat("Patient unique values:", unique(CSSA[[col_pat]]), "\n")
+  }
+}
+
+#contingence table for strenght item for each visit to see the distribution of ratings between clinician and patient
+
+for(v in 1:10){
+  cat("\nVisit:", v, "\n")
+  print(table(
+    CSSA[[paste0("v", v, "_cssforcemoy")]],
+    CSSA[[paste0("v", v, "_css9")]]
+  ))
+}
+
 ```
 
 
