@@ -139,7 +139,23 @@ ggplot(df_all, aes(x = Score, color = Type, fill = Type)) +
        x = "CSS severity level",
        y = "Density") +
   theme_minimal()
+
 ```
+
+```{r, echo=TRUE}
+# Wilcoxon signed-rank test comparing mean objective vs subjective scores per patient
+test_data <- CSSScores %>%
+  rowwise() %>%
+  mutate(
+    mean_obj  = mean(c_across(all_of(cols_obj)), na.rm = TRUE),
+    mean_subj = mean(c_across(all_of(cols_subj)), na.rm = TRUE)
+  ) %>%
+  ungroup()
+
+wilcox.test(test_data$mean_obj, test_data$mean_subj, paired = TRUE)
+```
+
+
 
 ```{r, echo=TRUE}
 #numeric descriptive statistics 
@@ -368,6 +384,11 @@ scale_x_continuous(breaks = seq(0, 8, 1))  +
     color = "Patient"
   ) +
   theme_minimal()
+
+#number of observations and complete cases for mean and diff
+nrow(data_long)
+
+sum(complete.cases(data_long$mean, data_long$diff))
 ```
 
 
@@ -536,8 +557,8 @@ ggplot(data_long, aes(x = mean, y = diff, color = sid)) +
   geom_hline(yintercept = mean_diff_re, color = "blue", linetype = "dashed") +
  
   # Use clinical threshold for lower and upper limits
-geom_hline(yintercept = lower_limit_clinical, color = "green", linetype = "solid") +
-geom_hline(yintercept = upper_limit_clinical, color = "green", linetype = "solid") +
+geom_hline(yintercept = -2.5, color = "green", linetype = "solid") +
+geom_hline(yintercept = 2.5, color = "green", linetype = "solid") +
   
   # 1.96 SD limits 
 geom_hline(yintercept = lower_limit_sd, color = "red", linetype = "dashed") +
@@ -603,19 +624,6 @@ ba_results <- ba_results %>%
     Lower_LoA = ba_np$lower_limit,
     Upper_LoA = ba_np$upper_limit
   )
-
-# Compute median and 2.5% - 97.5% percentiles manually
-# median_diff <- median(data_long$diff, na.rm = TRUE)
-# lower_np <- quantile(data_long$diff, 0.025, na.rm = TRUE)
-# upper_np <- quantile(data_long$diff, 0.975, na.rm = TRUE)
-# 
-# ba_results <- ba_results %>%
-#   add_row(
-#     Method = "Nonparametric",
-#     Bias = median_diff,
-#     Lower_LoA = lower_np,
-#     Upper_LoA = upper_np
-#   )
 
 
 # 3. Bland-Altman with Random Effects
@@ -696,7 +704,7 @@ library(irr)
 kappa_results <- data.frame()
 
 # Visit lists
-visits <- paste0("v", 1:20) # adapte si tu as moins de 20 visites
+visits <- paste0("v", 1:20) 
 
 for(v in visits){
 
@@ -728,6 +736,7 @@ for(v in visits){
 
 kappa_results
 ```
+
 ```{r, echo=TRUE}
 #Cohen's kappa for all items
 library(dplyr)
@@ -807,7 +816,72 @@ ggplot(kappa_avg, aes(x = reorder(item, mean_kappa), y = mean_kappa, fill = item
   geom_hline(yintercept = c(0, 0.2, 0.4, 0.6, 0.8), linetype = "dashed", color = "grey") +
   theme_minimal() +
   labs(title = "Average Cohen's Kappa per Item",
-       x = "Item",
+       x = "Item CSS",
+       y = "Mean Kappa") +
+  theme(legend.position = "none")
+
+#average plot with background zones for interpretation of Kappa values
+ggplot(kappa_avg, aes(x = reorder(item, mean_kappa), y = mean_kappa, fill = item)) +
+  
+  
+  geom_bar(stat = "identity") +
+  coord_flip() +
+
+  geom_hline(yintercept = c(0, 0.2, 0.4, 0.6, 0.8), 
+             linetype = "dashed", color = "grey") +
+
+  # Labels zones
+  annotate("text", x = 0.5, y = -0.05, label = "Poor", size = 3) +
+  annotate("text", x = 0.5, y = 0.1, label = "Slight", size = 3) +
+  annotate("text", x = 0.5, y = 0.3, label = "Fair", size = 3) +
+  annotate("text", x = 0.5, y = 0.5, label = "Moderate", size = 3) +
+  annotate("text", x = 0.5, y = 0.7, label = "Substantial", size = 3) +
+
+
+  theme_minimal() +
+  labs(title = "Average Cohen's Kappa per Item",
+       x = "Item CSS",
+       y = "Mean Kappa") +
+  theme(legend.position = "none")
+
+#average plot with background zones for interpretation of Kappa values 
+
+ggplot(kappa_avg, aes(x = reorder(item, mean_kappa), y = mean_kappa, fill = item)) +
+  
+  # Background agreement zones with colors
+  annotate("rect", xmin = -Inf, xmax = Inf, ymin = -0.1, ymax = 0, 
+           fill = "#d73027", alpha = 0.15) +
+
+  annotate("rect", xmin = -Inf, xmax = Inf, ymin = 0, ymax = 0.2, 
+           fill = "#fc8d59", alpha = 0.15) +
+
+  annotate("rect", xmin = -Inf, xmax = Inf, ymin = 0.2, ymax = 0.4, 
+           fill = "#fee08b", alpha = 0.15) +
+
+  annotate("rect", xmin = -Inf, xmax = Inf, ymin = 0.4, ymax = 0.6, 
+           fill = "#d9ef8b", alpha = 0.15) +
+
+  annotate("rect", xmin = -Inf, xmax = Inf, ymin = 0.6, ymax = 0.8, 
+           fill = "#1a9850", alpha = 0.15) +
+
+  # bars
+  geom_bar(stat = "identity") +
+  coord_flip() +
+
+  # threshold lines
+  geom_hline(yintercept = c(0, 0.2, 0.4, 0.6, 0.8), 
+             linetype = "dashed", color = "grey") +
+
+  # Labels
+  annotate("text", x = 0.5, y = -0.05, label = "Poor", size = 3) +
+  annotate("text", x = 0.5, y = 0.1, label = "Slight", size = 3) +
+  annotate("text", x = 0.5, y = 0.3, label = "Fair", size = 3) +
+  annotate("text", x = 0.5, y = 0.5, label = "Moderate", size = 3) +
+  annotate("text", x = 0.5, y = 0.7, label = "Substantial", size = 3) +
+
+  theme_minimal() +
+  labs(title = "Average Cohen's Kappa per Item",
+       x = "Item CSS",
        y = "Mean Kappa") +
   theme(legend.position = "none")
 
