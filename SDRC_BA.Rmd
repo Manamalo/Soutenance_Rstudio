@@ -96,7 +96,7 @@ patient_means <- CSSScores %>%
 
 ggplot(patient_means, aes(x = Type, y = MeanScore, fill = Type)) +
   geom_boxplot(alpha = 0.6) +
-  geom_jitter(width = 0.1, alpha = 0.5, color = "black") +  # show individual patient points
+  geom_point(position = position_jitter(width = 0.01), size = 1.5, alpha = 0.6) +  # show individual patient points
   scale_fill_manual(values = c("Objective" = "lightgreen", "Subjective" = "lightpink")) +
   labs(title = "Comparison of Mean CSS Scores",
        x = "Score Type",
@@ -694,7 +694,8 @@ CSSA <- read.csv("data/df_binarise_final.csv", sep=";")
 ```
 
 
-```{r, echo=TRUE}
+
+```{r Cohen, echo=TRUE, results='hide', message=FALSE, warning=FALSE, include=FALSE}
 
 #Cohen's Kappa for pain only
 library(dplyr)
@@ -734,10 +735,10 @@ for(v in visits){
   }
 }
 
-kappa_results
+print (kappa_results)
 ```
 
-```{r, echo=TRUE}
+```{r, echo=TRUE, results='hide', message=FALSE, warning=FALSE, include=FALSE}
 #Cohen's kappa for all items
 library(dplyr)
 library(irr)
@@ -783,8 +784,10 @@ for(item_name in names(item_map)){
 }
 
 kappa_results
+```
 
 
+```{r, echo=TRUE}
 #transform visit in numeric for plotting
 kappa_results$visit <- factor(kappa_results$visit, levels = paste0("v", 1:20))
 
@@ -886,7 +889,7 @@ ggplot(kappa_avg, aes(x = reorder(item, mean_kappa), y = mean_kappa, fill = item
   theme(legend.position = "none")
 
 ```
-```{r, echo=TRUE}
+```{r, echo=TRUE, results='hide', message=FALSE, warning=FALSE, class.source="foldable"}
 #there is a problem with strength item
 #check why strength is not interpretable
 for(v in 1:20){
