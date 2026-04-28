@@ -97,10 +97,29 @@ patient_means <- CSSScores %>%
 ggplot(patient_means, aes(x = Type, y = MeanScore, fill = Type)) +
   geom_boxplot(alpha = 0.6) +
   geom_point(position = position_jitter(width = 0.01), size = 1.5, alpha = 0.6) +  # show individual patient points
-  scale_fill_manual(values = c("Objective" = "lightgreen", "Subjective" = "lightpink")) +
+  scale_fill_manual(
+  values = c("Objective" = "lightgreen", "Subjective" = "lightpink"),
+  labels = c("Objective" = "Objective clinician",
+             "Subjective" = "Subjective patient")
+) +
   labs(title = "Comparison of Mean CSS Scores",
        x = "Score Type",
        y = "Mean CSS Score") +
+  theme_minimal()
+
+#boxplot without mean
+
+ggplot(df_all, aes(x = Type, y = Score, fill = Type)) +
+  geom_boxplot(alpha = 0.6) +
+  scale_fill_manual(
+    values = c("Objective" = "lightgreen", "Subjective" = "lightpink"),
+    labels = c("Objective" = "Objective clinician",
+               "Subjective" = "Subjective patient")
+  ) +
+  labs(title = "Distribution of CSS Severity Scores (Clinician vs Patient)",
+       x = "Score Type",
+       y = "CSS Score") +
+  scale_x_discrete(labels = NULL)+
   theme_minimal()
 
 
@@ -132,8 +151,16 @@ df_all <- bind_rows(df_obj, df_subj)
 
 ggplot(df_all, aes(x = Score, color = Type, fill = Type)) +
   geom_density(alpha = 0.3) +
-  scale_color_manual(values = c("Objective" = "lightgreen", "Subjective" = "lightpink")) +
-  scale_fill_manual(values = c("Objective" = "lightgreen", "Subjective" = "lightpink")) +
+  scale_color_manual(
+  values = c("Objective" = "lightgreen", "Subjective" = "lightpink"),
+  labels = c("Objective" = "Objective clinician",
+             "Subjective" = "Subjective patient")
+) +
+scale_fill_manual(
+  values = c("Objective" = "lightgreen", "Subjective" = "lightpink"),
+  labels = c("Objective" = "Objective clinician",
+             "Subjective" = "Subjective patient")
+) +
   xlim(0, 8) +
   labs(title = "Density of CSS Scores",
        x = "CSS severity level",
@@ -159,17 +186,21 @@ wilcox.test(test_data$mean_obj, test_data$mean_subj, paired = TRUE)
 
 ```{r, echo=TRUE}
 #numeric descriptive statistics 
-stats_summary <- patient_means %>%
+
+stats_summary
+
+stats_summary <- df_all %>%
   group_by(Type) %>%
   summarise(
     n = n(),
-    mean = mean(MeanScore, na.rm = TRUE),
-    sd = sd(MeanScore, na.rm = TRUE),
-    median = median(MeanScore, na.rm = TRUE),
-    Q1 = quantile(MeanScore, 0.25, na.rm = TRUE),
-    Q3 = quantile(MeanScore, 0.75, na.rm = TRUE),
-    min = min(MeanScore, na.rm = TRUE),
-    max = max(MeanScore, na.rm = TRUE)
+    mean = mean(Score, na.rm = TRUE),
+    sd = sd(Score, na.rm = TRUE),
+    median = median(Score, na.rm = TRUE),
+    Q1 = quantile(Score, 0.25, na.rm = TRUE),
+    Q3 = quantile(Score, 0.75, na.rm = TRUE),
+    min = min(Score, na.rm = TRUE),
+    max = max(Score, na.rm = TRUE),
+    .groups = "drop"
   )
 
 stats_summary
@@ -429,18 +460,16 @@ qqline(data_long$diff, col = "red")
 library(dplyr)
 library(ggplot2)
 
-# calcul non paramétrique
+# non parametric compute bias and limits of agreement
 ba_np <- data_long %>%
-  mutate(diff = Scoreobj - Scoresubj,
-         mean = (Scoreobj + Scoresubj)/2) %>%
   summarise(
     median_diff = median(diff, na.rm = TRUE),
     lower_limit = quantile(diff, 0.025, na.rm = TRUE),
     upper_limit = quantile(diff, 0.975, na.rm = TRUE)
   )
 
-# plot avec ggplot
-ggplot(data_long, aes(x = (Scoreobj + Scoresubj)/2, y = Scoreobj - Scoresubj)) +
+# plot with ggplot
+ggplot(data_long, aes(x = mean, y = diff)) +
   geom_count(aes(color = sid), alpha = 0.7) +
   geom_hline(yintercept = ba_np$median_diff, color = "blue", linetype = "dashed") +
   geom_hline(yintercept = ba_np$lower_limit, color = "red", linetype = "dashed") +
@@ -503,6 +532,9 @@ scale_x_continuous(breaks = seq(0, 8, 1)) +
 
 
 ```{r, echo=TRUE}
+
+#Bland Altman with clinical threshold for all visits combined
+
 library(ggplot2)
 library(dplyr)
 library(lme4)
@@ -513,18 +545,14 @@ model_re <- lmer(diff ~ 1 + (1 | sid), data = data_long)
 # Extract the fixed effect (overall mean difference = bias)
 mean_diff_re <- fixef(model_re)[1]
 
+var_components <- as.data.frame(VarCorr(model_re))
+var_between <- var_components$vcov[var_components$grp == "sid"]
+var_within <- attr(VarCorr(model_re), "sc")^2
 
-# Define the minimal clinical threshold (instead of 1.96*SD)
-clinical_threshold <- 2.5
+sd_total <- sqrt(var_between + var_within)
 
-# Compute Bland-Altman limits using the clinical threshold
-lower_limit_clinical <- mean_diff_re - clinical_threshold
-upper_limit_clinical <- mean_diff_re + clinical_threshold
-
-# Classic Bland-Altman limits (±1.96 SD)
-sd_diff <- sd(data_long$diff)
-lower_limit_sd <- mean_diff_re - 1.96 * sd_diff
-upper_limit_sd <- mean_diff_re + 1.96 * sd_diff
+lower_limit_re <- mean_diff_re - 1.96 * sd_total
+upper_limit_re <- mean_diff_re + 1.96 * sd_total
 
 # Clinical threshold (SRD)
 threshold <- 2.5
@@ -555,20 +583,18 @@ pct_positive
 ggplot(data_long, aes(x = mean, y = diff, color = sid)) +
   geom_count(alpha = 0.7) +
   geom_hline(yintercept = mean_diff_re, color = "blue", linetype = "dashed") +
- 
-  # Use clinical threshold for lower and upper limits
-geom_hline(yintercept = -2.5, color = "green", linetype = "solid") +
-geom_hline(yintercept = 2.5, color = "green", linetype = "solid") +
+
+geom_hline(yintercept = lower_limit_re, color = "red", linetype = "dashed") +
+geom_hline(yintercept = upper_limit_re, color = "red", linetype = "dashed") +    
   
-  # 1.96 SD limits 
-geom_hline(yintercept = lower_limit_sd, color = "red", linetype = "dashed") +
-geom_hline(yintercept = upper_limit_sd, color = "red", linetype = "dashed") +
+geom_hline(yintercept = -threshold, color = "green") +
+geom_hline(yintercept = threshold, color = "green") +  
 
   coord_cartesian(ylim = c(-8, 8), xlim = c(0, 8)) +
   scale_y_continuous(breaks = seq(-8, 8, 1)) +
   scale_x_continuous(breaks = seq(0, 8, 1)) +
   labs(
-    title = "Bland-Altman Plot with clinical threshold of ±2.5",
+    title = "Bland-Altman (random effects) with clinical threshold of ±2.5",
     x = "Mean score (objective and subjective)",
     y = "Score difference (objective - subjective)",
     color = "Patient"
@@ -847,46 +873,46 @@ ggplot(kappa_avg, aes(x = reorder(item, mean_kappa), y = mean_kappa, fill = item
        y = "Mean Kappa") +
   theme(legend.position = "none")
 
-#average plot with background zones for interpretation of Kappa values 
-
-ggplot(kappa_avg, aes(x = reorder(item, mean_kappa), y = mean_kappa, fill = item)) +
-  
-  # Background agreement zones with colors
-  annotate("rect", xmin = -Inf, xmax = Inf, ymin = -0.1, ymax = 0, 
-           fill = "#d73027", alpha = 0.15) +
-
-  annotate("rect", xmin = -Inf, xmax = Inf, ymin = 0, ymax = 0.2, 
-           fill = "#fc8d59", alpha = 0.15) +
-
-  annotate("rect", xmin = -Inf, xmax = Inf, ymin = 0.2, ymax = 0.4, 
-           fill = "#fee08b", alpha = 0.15) +
-
-  annotate("rect", xmin = -Inf, xmax = Inf, ymin = 0.4, ymax = 0.6, 
-           fill = "#d9ef8b", alpha = 0.15) +
-
-  annotate("rect", xmin = -Inf, xmax = Inf, ymin = 0.6, ymax = 0.8, 
-           fill = "#1a9850", alpha = 0.15) +
-
-  # bars
-  geom_bar(stat = "identity") +
-  coord_flip() +
-
-  # threshold lines
-  geom_hline(yintercept = c(0, 0.2, 0.4, 0.6, 0.8), 
-             linetype = "dashed", color = "grey") +
-
-  # Labels
-  annotate("text", x = 0.5, y = -0.05, label = "Poor", size = 3) +
-  annotate("text", x = 0.5, y = 0.1, label = "Slight", size = 3) +
-  annotate("text", x = 0.5, y = 0.3, label = "Fair", size = 3) +
-  annotate("text", x = 0.5, y = 0.5, label = "Moderate", size = 3) +
-  annotate("text", x = 0.5, y = 0.7, label = "Substantial", size = 3) +
-
-  theme_minimal() +
-  labs(title = "Average Cohen's Kappa per Item",
-       x = "Item CSS",
-       y = "Mean Kappa") +
-  theme(legend.position = "none")
+# #average plot with background zones for interpretation of Kappa values 
+# 
+# ggplot(kappa_avg, aes(x = reorder(item, mean_kappa), y = mean_kappa, fill = item)) +
+#   
+#   # Background agreement zones with colors
+#   annotate("rect", xmin = -Inf, xmax = Inf, ymin = -0.1, ymax = 0, 
+#            fill = "#d73027", alpha = 0.15) +
+# 
+#   annotate("rect", xmin = -Inf, xmax = Inf, ymin = 0, ymax = 0.2, 
+#            fill = "#fc8d59", alpha = 0.15) +
+# 
+#   annotate("rect", xmin = -Inf, xmax = Inf, ymin = 0.2, ymax = 0.4, 
+#            fill = "#fee08b", alpha = 0.15) +
+# 
+#   annotate("rect", xmin = -Inf, xmax = Inf, ymin = 0.4, ymax = 0.6, 
+#            fill = "#d9ef8b", alpha = 0.15) +
+# 
+#   annotate("rect", xmin = -Inf, xmax = Inf, ymin = 0.6, ymax = 0.8, 
+#            fill = "#1a9850", alpha = 0.15) +
+# 
+#   # bars
+#   geom_bar(stat = "identity") +
+#   coord_flip() +
+# 
+#   # threshold lines
+#   geom_hline(yintercept = c(0, 0.2, 0.4, 0.6, 0.8), 
+#              linetype = "dashed", color = "grey") +
+# 
+#   # Labels
+#   annotate("text", x = 0.5, y = -0.05, label = "Poor", size = 3) +
+#   annotate("text", x = 0.5, y = 0.1, label = "Slight", size = 3) +
+#   annotate("text", x = 0.5, y = 0.3, label = "Fair", size = 3) +
+#   annotate("text", x = 0.5, y = 0.5, label = "Moderate", size = 3) +
+#   annotate("text", x = 0.5, y = 0.7, label = "Substantial", size = 3) +
+# 
+#   theme_minimal() +
+#   labs(title = "Average Cohen's Kappa per Item",
+#        x = "Item CSS",
+#        y = "Mean Kappa") +
+#   theme(legend.position = "none")
 
 ```
 ```{r, echo=TRUE, results='hide', message=FALSE, warning=FALSE, class.source="foldable"}
@@ -914,6 +940,240 @@ for(v in 1:10){
 }
 
 ```
+```{r}
+# #variabilité des réponses dans le temps chez les patients pour les 3 items discordants
+# library(dplyr)
+# 
+# # fonction pour calculer le nombre de changements dans le temps
+# count_transitions <- function(x){
+#   sum(abs(diff(x, na.rm = TRUE)), na.rm = TRUE)
+# }
+# 
+# # items à tester
+# items_labiles <- c("csstemp", "csseryth", "csssud")
+# 
+# results_lability <- data.frame()
+# 
+# for(item in items_labiles){
+#   for(i in 1:nrow(CSSA)){  # pour chaque patient
+#     
+#     # récupérer les 20 visites patient
+#     pat_values <- unlist(CSSA[i, paste0("v", 1:20, "_", item)])
+#     
+#     # nombre de transitions
+#     transitions <- count_transitions(pat_values)
+#     
+#     results_lability <- rbind(results_lability,
+#                              data.frame(patient = i,
+#                                         item = item,
+#                                         transitions = transitions))
+#   }
+# }
+# 
+# results_lability
 
+```
 
+```{r}
+
+# #niveau de variabilité par items
+# library(dplyr)
+# 
+# results_lability %>%
+#   group_by(item) %>%
+#   summarize(
+#     mean_transitions = mean(transitions),
+#     sd_transitions = sd(transitions),
+#     min = min(transitions),
+#     max = max(transitions)
+#   )
+```
+```{r}
+# #comparer la variabilité des réponses entre patients et cliniciens pour les 3 items discordants
+# count_transitions <- function(x){
+#   sum(abs(diff(x)), na.rm = TRUE)
+# }
+# 
+# results_compare <- data.frame()
+# 
+# items_labiles <- list(
+#   Temperature = c("csstemp", "css4"),
+#   Erythema    = c("csseryth", "css5"),
+#   Sweating    = c("csssud", "css6")
+# )
+# 
+# for(item_name in names(items_labiles)){
+#   
+#   cols <- items_labiles[[item_name]]
+#   
+#   for(i in 1:nrow(CSSA)){
+#     
+#     # patient
+#     pat_values <- unlist(CSSA[i, paste0("v", 1:20, "_", cols[2])])
+#     
+#     # clinician
+#     clin_values <- unlist(CSSA[i, paste0("v", 1:20, "_", cols[1])])
+#     
+#     results_compare <- rbind(results_compare,
+#       data.frame(
+#         patient = i,
+#         item = item_name,
+#         transitions_patient = count_transitions(pat_values),
+#         transitions_clinician = count_transitions(clin_values)
+#       )
+#     )
+#   }
+# }
+# 
+# results_compare
+```
+```{r}
+# #analyse de la labilité pour chaque item entre patients et soignants
+# library(dplyr)
+# 
+# count_transitions <- function(x){
+#   sum(abs(diff(x)), na.rm = TRUE)
+# }
+# 
+# # mapping items (clinicien vs patient)
+# item_map <- list(
+#   Pain = c("cssdoul", "css2"),
+#   Hyperalgesia = c("csshypall", "css3"),
+#   Temperature = c("csstemp", "css4"),
+#   Erythema = c("csseryth", "css5"),
+#   Sweating = c("csssud", "css6"),
+#   Edema = c("cssoed", "css7"),
+#   Trophicity = c("csstroph", "css8"),
+#   Strength = c("cssforcemoy", "css9")
+# )
+# 
+# results_lability_full <- data.frame()
+# 
+# for(item_name in names(item_map)){
+#   
+#   cols <- item_map[[item_name]]
+#   
+#   for(i in 1:nrow(CSSA)){
+#     
+#     patient_values <- unlist(CSSA[i, paste0("v", 1:20, "_", cols[2])])
+#     clinician_values <- unlist(CSSA[i, paste0("v", 1:20, "_", cols[1])])
+#     
+#     results_lability_full <- rbind(results_lability_full,
+#       data.frame(
+#         patient = i,
+#         item = item_name,
+#         transitions_patient = count_transitions(patient_values),
+#         transitions_clinician = count_transitions(clinician_values)
+#       )
+#     )
+#   }
+# }
+# 
+# lability_summary <- results_lability_full %>%
+#   group_by(item) %>%
+#   summarize(
+#     mean_patient = mean(transitions_patient, na.rm = TRUE),
+#     mean_clinician = mean(transitions_clinician, na.rm = TRUE),
+#     diff = mean_clinician - mean_patient
+#   )
+# 
+# lability_summary
+# 
+# library(ggplot2)
+# 
+# results_lability_long <- results_lability_full %>%
+#   tidyr::pivot_longer(
+#     cols = c(transitions_patient, transitions_clinician),
+#     names_to = "type",
+#     values_to = "transitions"
+#   )
+# 
+# ggplot(results_lability_long, aes(x = item, y = transitions, fill = type)) +
+#   geom_boxplot() +
+#   theme_minimal() +
+#   labs(title = "Variability (Transitions) by Item and Rater",
+#        y = "Number of transitions")
+# 
+# # merge avec kappa moyen
+# analysis_df <- merge(lability_summary, kappa_avg, by = "item")
+# 
+# analysis_df
+# 
+# cor.test(analysis_df$mean_clinician, analysis_df$mean_kappa, method = "spearman")
+# 
+# ggplot(analysis_df, aes(x = mean_clinician, y = mean_kappa, label = item)) +
+#   geom_point(size = 3) +
+#   geom_text(nudge_y = 0.02) +
+#   theme_minimal() +
+#   labs(title = "Lability vs Agreement",
+#        x = "Clinician variability",
+#        y = "Mean Kappa")
+```
+
+```{r}
+library(dplyr)
+library(tidyr)
+
+# Items Mapping 
+item_map <- list(
+  Pain      = c("cssdoul", "css2"),
+  Hyperalgesia = c("csshypall", "css3"),
+  Temperature  = c("csstemp", "css4"),
+  Erythema     = c("csseryth", "css5"),
+  Sweating     = c("csssud", "css6"),
+  Edema        = c("cssoed", "css7"),
+  Trophicity   = c("csstroph", "css8"),
+  Strength     = c("cssforcemoy", "css9")
+)
+
+visits <- paste0("v", 1:20)
+
+# Dataframe results
+desc_table <- data.frame()
+
+for(item_name in names(item_map)){
+  
+  cols <- item_map[[item_name]]
+  
+  clinician_vals <- c()
+  patient_vals <- c()
+  
+  for(v in visits){
+    
+    col_clin <- paste0(v, "_", cols[1])
+    col_pat  <- paste0(v, "_", cols[2])
+    
+    if(all(c(col_clin, col_pat) %in% colnames(CSSA))){
+      clinician_vals <- c(clinician_vals, CSSA[[col_clin]])
+      patient_vals   <- c(patient_vals, CSSA[[col_pat]])
+    }
+  }
+  
+  # Remove NA
+  clinician_vals <- clinician_vals[!is.na(clinician_vals)]
+  patient_vals   <- patient_vals[!is.na(patient_vals)]
+  
+  # Compute counts
+  clin_yes <- sum(clinician_vals == 1)
+  clin_no  <- sum(clinician_vals == 0)
+  
+  pat_yes <- sum(patient_vals == 1)
+  pat_no  <- sum(patient_vals == 0)
+  
+  # Percentages
+  clin_total <- length(clinician_vals)
+  pat_total  <- length(patient_vals)
+  
+  desc_table <- rbind(desc_table,
+                   data.frame(
+                     Item = item_name,
+                     `Clinician – Sign Present` = paste0(clin_yes, " (", round(100*clin_yes/clin_total,1), "%)"),
+                     `Clinician – Sign Absent`  = paste0(clin_no, " (", round(100*clin_no/clin_total,1), "%)"),
+                     `Patient – Symptom Present` = paste0(pat_yes, " (", round(100*pat_yes/pat_total,1), "%)"),
+                     `Patient – Symptom Absent`  = paste0(pat_no, " (", round(100*pat_no/pat_total,1), "%)")
+                   ))
+}
+
+desc_table
+```
 
