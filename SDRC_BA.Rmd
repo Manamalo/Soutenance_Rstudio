@@ -107,23 +107,8 @@ ggplot(patient_means, aes(x = Type, y = MeanScore, fill = Type)) +
        y = "Mean CSS Score") +
   theme_minimal()
 
-#boxplot without mean
-
-ggplot(df_all, aes(x = Type, y = Score, fill = Type)) +
-  geom_boxplot(alpha = 0.6) +
-  scale_fill_manual(
-    values = c("Objective" = "lightgreen", "Subjective" = "lightpink"),
-    labels = c("Objective" = "Objective clinician",
-               "Subjective" = "Subjective patient")
-  ) +
-  labs(title = "Distribution of CSS Severity Scores (Clinician vs Patient)",
-       x = "Score Type",
-       y = "CSS Score") +
-  scale_x_discrete(labels = NULL)+
-  theme_minimal()
-
-
-# Prepare density data
+# Prepare data for repeated-measures analyses and plots
+# Data preparation: transformation to long format for descriptive analyses (boxplot and density)
 
 # Objective scores
 df_obj <- CSSScores %>%
@@ -145,6 +130,22 @@ df_subj <- CSSScores %>%
 
 # Combine
 df_all <- bind_rows(df_obj, df_subj)
+
+
+#boxplot for all repeated measurements
+
+ggplot(df_all, aes(x = Type, y = Score, fill = Type)) +
+  geom_boxplot(alpha = 0.6) +
+  scale_fill_manual(
+    values = c("Objective" = "lightgreen", "Subjective" = "lightpink"),
+    labels = c("Objective" = "Objective clinician",
+               "Subjective" = "Subjective patient")
+  ) +
+  labs(title = "Distribution of CSS Severity Scores (Clinician vs Patient)",
+       x = "Score Type",
+       y = "CSS Score") +
+  scale_x_discrete(labels = NULL)+
+  theme_minimal()
 
 
 # Density plot
@@ -179,15 +180,19 @@ test_data <- CSSScores %>%
   ) %>%
   ungroup()
 
-wilcox.test(test_data$mean_obj, test_data$mean_subj, paired = TRUE)
+# Wilcoxon rank-sum test on all repeated measurements
+wilcox.test(Score ~ Type, data = df_all, exact = FALSE)
+
+# Wilcoxon signed-rank test on patient-level mean scores
+
+wilcox.test(MeanScore ~ Type, data = patient_means, paired = TRUE, exact = FALSE)
+
 ```
 
 
 
 ```{r, echo=TRUE}
 #numeric descriptive statistics 
-
-stats_summary
 
 stats_summary <- df_all %>%
   group_by(Type) %>%
@@ -206,6 +211,28 @@ stats_summary <- df_all %>%
 stats_summary
 ```
 
+```{r}
+#ICC by patients
+library(dplyr)
+library(tidyr)
+library(irr)
+library(psych)
+
+# Moyennes par patient (comme pour ton analyse Bland-Altman)
+icc_data <- CSSScores %>%
+  rowwise() %>%
+  mutate(
+    mean_obj  = mean(c_across(all_of(cols_obj)), na.rm = TRUE),
+    mean_subj = mean(c_across(all_of(cols_subj)), na.rm = TRUE)
+  ) %>%
+  ungroup() %>%
+  select(mean_obj, mean_subj)
+
+# ICC (two-way mixed, absolute agreement = le plus pertinent ici)
+icc_result <- ICC(icc_data)
+
+icc_result
+```
 
 
 ```{r, echo=TRUE}
@@ -529,6 +556,26 @@ scale_x_continuous(breaks = seq(0, 8, 1)) +
   theme_minimal()
 
 ```
+```{r, echo=TRUE}
+#plot for the residuals of the random effects model
+
+# Residual extraction
+res <- residuals(model_re)
+
+# Density plot of residuals
+ggplot(data.frame(res), aes(x = res)) +
+  geom_density(fill = "grey", alpha = 0.5) +
+  geom_histogram(aes(y = ..density..), bins = 20, alpha = 0.3) +
+  labs(
+    title = "Distribution of residuals (random-effects Bland-Altman)",
+    x = "Residuals",
+    y = "Density"
+  ) +
+  theme_minimal()
+
+qqnorm(residuals(model_re))
+qqline(residuals(model_re), col = "red")
+```
 
 
 ```{r, echo=TRUE}
@@ -671,22 +718,6 @@ ba_results <- ba_results %>%
     Lower_LoA = lower_re,
     Upper_LoA = upper_re
   )
-
-
-# 4. Bland-Altman with Clinical Threshold ±2.5
-
-clinical_threshold <- 2.5
-lower_clinical <- mean_diff_re - clinical_threshold
-upper_clinical <- mean_diff_re + clinical_threshold
-
-ba_results <- ba_results %>%
-  add_row(
-    Method = "Clinical Threshold ±2.5",
-    Bias = mean_diff_re,
-    Lower_LoA = lower_clinical,
-    Upper_LoA = upper_clinical
-  )
-
 
 # Display comparative table
 
@@ -838,16 +869,16 @@ kappa_avg <- kappa_results %>%
 kappa_avg
 
 
-#average plot
-ggplot(kappa_avg, aes(x = reorder(item, mean_kappa), y = mean_kappa, fill = item)) +
-  geom_bar(stat = "identity") +
-  coord_flip() +
-  geom_hline(yintercept = c(0, 0.2, 0.4, 0.6, 0.8), linetype = "dashed", color = "grey") +
-  theme_minimal() +
-  labs(title = "Average Cohen's Kappa per Item",
-       x = "Item CSS",
-       y = "Mean Kappa") +
-  theme(legend.position = "none")
+# #average plot
+# ggplot(kappa_avg, aes(x = reorder(item, mean_kappa), y = mean_kappa, fill = item)) +
+#   geom_bar(stat = "identity") +
+#   coord_flip() +
+#   geom_hline(yintercept = c(0, 0.2, 0.4, 0.6, 0.8), linetype = "dashed", color = "grey") +
+#   theme_minimal() +
+#   labs(title = "Average Cohen's Kappa per Item",
+#        x = "Item CSS",
+#        y = "Mean Kappa") +
+#   theme(legend.position = "none")
 
 #average plot with background zones for interpretation of Kappa values
 ggplot(kappa_avg, aes(x = reorder(item, mean_kappa), y = mean_kappa, fill = item)) +
