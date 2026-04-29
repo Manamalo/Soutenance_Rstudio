@@ -211,14 +211,14 @@ stats_summary <- df_all %>%
 stats_summary
 ```
 
-```{r}
-#ICC by patients
+```{r, echo=TRUE}
+#ICC by patients mean
 library(dplyr)
 library(tidyr)
 library(irr)
 library(psych)
 
-# Moyennes par patient (comme pour ton analyse Bland-Altman)
+# mean by patient
 icc_data <- CSSScores %>%
   rowwise() %>%
   mutate(
@@ -228,7 +228,7 @@ icc_data <- CSSScores %>%
   ungroup() %>%
   select(mean_obj, mean_subj)
 
-# ICC (two-way mixed, absolute agreement = le plus pertinent ici)
+# ICC (two-way mixed, absolute agreement)
 icc_result <- ICC(icc_data)
 
 icc_result
@@ -1206,5 +1206,67 @@ for(item_name in names(item_map)){
 }
 
 desc_table
+```
+```{r}
+#Gwett AC1 for all items
+library(irrCAC)
+library(dplyr)
+
+visits <- paste0("v", 1:20)
+
+ac1_results <- data.frame()
+
+for(item_name in names(item_map)){
+
+  cols <- item_map[[item_name]]
+
+  clinician_all <- c()
+  patient_all <- c()
+
+  for(v in visits){
+
+    col_clin <- paste0(v, "_", cols[1])
+    col_pat  <- paste0(v, "_", cols[2])
+
+    if(all(c(col_clin, col_pat) %in% colnames(CSSA))){
+
+      clinician_all <- c(clinician_all, CSSA[[col_clin]])
+      patient_all   <- c(patient_all, CSSA[[col_pat]])
+
+    }
+  }
+
+  df_item <- data.frame(
+    rater1 = clinician_all,
+    rater2 = patient_all
+  ) %>% na.omit()
+
+  # check variance
+  if(length(unique(df_item$rater1)) > 1 || length(unique(df_item$rater2)) > 1){
+
+    ac1 <- gwet.ac1.raw(df_item)
+
+    # correct extraction
+    ac1_value <- ac1$est$coeff.val
+
+    ac1_results <- rbind(ac1_results,
+      data.frame(
+        item = item_name,
+        AC1 = ac1_value
+      )
+    )
+
+  } else {
+
+    ac1_results <- rbind(ac1_results,
+      data.frame(
+        item = item_name,
+        AC1 = NA
+      )
+    )
+  }
+}
+
+ac1_results
 ```
 
