@@ -447,6 +447,7 @@ scale_x_continuous(breaks = seq(0, 8, 1))  +
 nrow(data_long)
 
 sum(complete.cases(data_long$mean, data_long$diff))
+
 ```
 
 
