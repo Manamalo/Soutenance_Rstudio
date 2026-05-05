@@ -412,6 +412,7 @@ data_long <- CSSScores %>%
     mean = (Scoreobj + Scoresubj)/2,
     diff = Scoreobj - Scoresubj
   )
+
 ```
 
 ```{r, echo=TRUE}
