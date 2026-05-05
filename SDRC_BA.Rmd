@@ -461,6 +461,7 @@ print(shapiro_test_global)
 # QQ-plot for all visits combined
 qqnorm(data_long$diff, main = "QQ-plot global differences")
 qqline(data_long$diff, col = "red") 
+
 ```
 
 ```{r, echo=TRUE}
