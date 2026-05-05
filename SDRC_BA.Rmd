@@ -92,20 +92,20 @@ patient_means <- CSSScores %>%
   mutate(Type = ifelse(Type == "mean_obj", "Objective", "Subjective"))
 
 
-#Boxplot comparing mean scores per patient
-
-ggplot(patient_means, aes(x = Type, y = MeanScore, fill = Type)) +
-  geom_boxplot(alpha = 0.6) +
-  geom_point(position = position_jitter(width = 0.01), size = 1.5, alpha = 0.6) +  # show individual patient points
-  scale_fill_manual(
-  values = c("Objective" = "lightgreen", "Subjective" = "lightpink"),
-  labels = c("Objective" = "Objective clinician",
-             "Subjective" = "Subjective patient")
-) +
-  labs(title = "Comparison of Mean CSS Scores",
-       x = "Score Type",
-       y = "Mean CSS Score") +
-  theme_minimal()
+# #Boxplot comparing mean scores per patient
+# 
+# ggplot(patient_means, aes(x = Type, y = MeanScore, fill = Type)) +
+#   geom_boxplot(alpha = 0.6) +
+#   geom_point(position = position_jitter(width = 0.01), size = 1.5, alpha = 0.6) +  # show individual patient points
+#   scale_fill_manual(
+#   values = c("Objective" = "lightgreen", "Subjective" = "lightpink"),
+#   labels = c("Objective" = "Objective clinician",
+#              "Subjective" = "Subjective patient")
+# ) +
+#   labs(title = "Comparison of Mean CSS Scores",
+#        x = "Score Type",
+#        y = "Mean CSS Score") +
+#   theme_minimal()
 
 # Prepare data for repeated-measures analyses and plots
 # Data preparation: transformation to long format for descriptive analyses (boxplot and density)
@@ -801,7 +801,7 @@ library(dplyr)
 library(irr)
 library(ggplot2)
 
-# Define mapping of items to columns (soignant = clinician, patient = patient)
+# Define mapping of items to columns 
 item_map <- list(
   Pain      = c("cssdoul", "css2"),
   Hyperalgesia = c("csshypall", "css3"),
@@ -852,13 +852,13 @@ kappa_results$visit <- factor(kappa_results$visit, levels = paste0("v", 1:20))
 # Fix order of visits
 kappa_results$visit <- factor(kappa_results$visit, levels = paste0("v", 1:20))
 
-# Plot
-ggplot(kappa_results, aes(x = visit, y = kappa, group = item, color = item)) +
-  geom_line() +
-  geom_point() +
-  theme_minimal() +
-  labs(title = "Inter-rater Agreement (Cohen's Kappa) per Item",
-       x = "Visit", y = "Cohen's Kappa")
+# # Plot
+# ggplot(kappa_results, aes(x = visit, y = kappa, group = item, color = item)) +
+#   geom_line() +
+#   geom_point() +
+#   theme_minimal() +
+#   labs(title = "Inter-rater Agreement (Cohen's Kappa) per Item",
+#        x = "Visit", y = "Cohen's Kappa")
 
 # Compute average Kappa per item if stable over time
 kappa_avg <- kappa_results %>%
