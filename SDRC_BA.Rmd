@@ -448,8 +448,6 @@ nrow(data_long)
 
 sum(complete.cases(data_long$mean, data_long$diff))
 
-
-
 ```
 
 
