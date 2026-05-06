@@ -185,7 +185,7 @@ wilcox.test(Score ~ Type, data = df_all, exact = FALSE)
 
 # Wilcoxon signed-rank test on patient-level mean scores
 
-wilcox.test(MeanScore ~ Type, data = patient_means, paired = TRUE, exact = FALSE)
+# wilcox.test(MeanScore ~ Type, data = patient_means, paired = TRUE, exact = FALSE)
 
 ```
 
@@ -739,7 +739,7 @@ ba_results %>%
     caption = "Comparison of methods Bland-Altman"
   )
 ```
-#Cohen's Kappa
+# Cohen's Kappa
 
 ```{r read_CSSA, echo=TRUE, results='hide', message=FALSE, warning=FALSE, class.source="foldable"}
 #read csv 
@@ -1212,6 +1212,9 @@ desc_table
 
 
 ```
+
+# Gwet's AC1
+
 ```{r}
 #Gwett AC1 for all items
 library(irrCAC)
