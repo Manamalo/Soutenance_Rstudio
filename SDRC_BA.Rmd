@@ -1,5 +1,6 @@
 ---
 title: "Code for RStudio soutenance"
+author: "Anaëlle AKAKPOVI and ChatGPT"
 date: "2026-02-13"
 output:
   html_document:
@@ -16,6 +17,8 @@ knitr::opts_chunk$set(
 ```
 
 # Descriptive analysis
+
+We want to compare the distribution of clinician (objective) and patient (subjective) CSS scores across all visits, and to test whether there is a significant difference between them with Wilcoxon test. We will also compute the ICC for mean scores by patient to check wich test is more appropriate for our problematic.
 
 ```{r read_CSSScores, echo=TRUE, results='hide', message=FALSE, warning=FALSE, class.source="foldable"}
 #read csv check the structure and descriptive statistics 
@@ -235,31 +238,12 @@ icc_result
 ```
 
 
-```{r, echo=TRUE}
+# Bland Altman
 
-
-# #descriptive statistics with a table for HTML document
-# library(dplyr)
-# library(tidyr)
-# library(stringr)
-# 
-# CSSScores %>%
-#   select(-sid) %>%
-#   summarise(across(everything(),
-#                    list(mean = mean, sd = sd))) %>%
-#   pivot_longer(everything(),
-#                names_to = "var",
-#                values_to = "value") %>%
-#   separate(var, into = c("visit", "type", "stat"), sep = "_") %>%
-#   pivot_wider(names_from = c(type, stat),
-#               values_from = value) %>%
-#   arrange(visit)
-```
-
-
+We compute Bland Alman with different methods for all visits combined: classic, non parametric, with random effects and with clinical threshold. The goal is to adapt the choice of method as closely as possible to the shape of the data. We also check the normality of differences distribution to choose the appropriate method. Finally, we compare the results of the different methods in a table.
 
 ```{r, echo=TRUE}
-# #bland Altman for V1
+# # first test bland Altman for V1
 # 
 # #create mean and difference columns for V1
 # CSSScores$V1_mean <- (CSSScores$V1_Scoreobj + CSSScores$V1_Scoresubj)/2
@@ -285,7 +269,6 @@ icc_result
 #        x = "Score mean (Obj & Subj)",
 #        y = "Score difference (Obj - Subj)")
 ```
-
 
 
 
@@ -347,48 +330,6 @@ icc_result
 # }
 ```
 
-# Bland Altman
-
-```{r ba_each_visit, fig.width=10, fig.height=8, echo=TRUE}
-
-# #bland altman for each visit with plot instead of ggplot for html document
-# 
-# par(mfrow = c(4, 5))   
-# 
-# for (v in 1:20) {
-# 
-#   obj_col <- paste0("V", v, "_Scoreobj")
-#   subj_col <- paste0("V", v, "_Scoresubj")
-#   mean_col <- paste0("V", v, "_mean")
-#   diff_col <- paste0("V", v, "_diff")
-#   
-#   CSSScores[[mean_col]] <- (CSSScores[[obj_col]] + CSSScores[[subj_col]]) / 2
-#   CSSScores[[diff_col]] <- CSSScores[[obj_col]] - CSSScores[[subj_col]]
-#   
-#   mean_diff <- mean(CSSScores[[diff_col]], na.rm = TRUE)
-#   sd_diff <- sd(CSSScores[[diff_col]], na.rm = TRUE)
-#   lower_limit <- mean_diff - 1.96 * sd_diff
-#   upper_limit <- mean_diff + 1.96 * sd_diff
-# 
-#   plot(
-#   CSSScores[[mean_col]],
-#   CSSScores[[diff_col]],
-#   main = paste("V", v),
-#   xlab = "Mean",
-#   ylab = "Diff",
-#   pch = 16,
-#   xlim = c(0, 8),
-#   ylim = c(-8, 8)
-# )
-# 
-#   abline(h = mean_diff, col = "blue", lty = 2)
-#   abline(h = lower_limit, col = "red", lty = 2)
-#   abline(h = upper_limit, col = "red", lty = 2)
-# }
-# 
-# mtext("Bland Altman for each visit", outer = TRUE, cex = 1.5, line = -2)
-
-```
 
 
 ```{r, echo=TRUE}
@@ -741,6 +682,8 @@ ba_results %>%
 ```
 # Cohen's Kappa
 
+We compute Cohen's Kappa for each item of the CSS: pain, hyperalgesia, temperature, erythema, sweating, edema, trophicity and strength for each visit to assess the inter-rater agreement between clinician and patient. We will then compare the Kappa values across items and visits to identify which items have better agreement. We also realize a contigence table for strength item to check the distribution of ratings and the potential impact on Kappa values. And we compute in a table the distribution of clinician and patient ratings for each CSS item across all visits.
+
 ```{r read_CSSA, echo=TRUE, results='hide', message=FALSE, warning=FALSE, class.source="foldable"}
 #read csv 
 CSSA <- read.csv("data/df_binarise_final.csv", sep=";")
@@ -872,17 +815,6 @@ kappa_avg <- kappa_results %>%
 kappa_avg
 
 
-# #average plot
-# ggplot(kappa_avg, aes(x = reorder(item, mean_kappa), y = mean_kappa, fill = item)) +
-#   geom_bar(stat = "identity") +
-#   coord_flip() +
-#   geom_hline(yintercept = c(0, 0.2, 0.4, 0.6, 0.8), linetype = "dashed", color = "grey") +
-#   theme_minimal() +
-#   labs(title = "Average Cohen's Kappa per Item",
-#        x = "Item CSS",
-#        y = "Mean Kappa") +
-#   theme(legend.position = "none")
-
 #average plot with background zones for interpretation of Kappa values
 ggplot(kappa_avg, aes(x = reorder(item, mean_kappa), y = mean_kappa, fill = item)) +
   
@@ -907,46 +839,6 @@ ggplot(kappa_avg, aes(x = reorder(item, mean_kappa), y = mean_kappa, fill = item
        y = "Mean Kappa") +
   theme(legend.position = "none")
 
-# #average plot with background zones for interpretation of Kappa values 
-# 
-# ggplot(kappa_avg, aes(x = reorder(item, mean_kappa), y = mean_kappa, fill = item)) +
-#   
-#   # Background agreement zones with colors
-#   annotate("rect", xmin = -Inf, xmax = Inf, ymin = -0.1, ymax = 0, 
-#            fill = "#d73027", alpha = 0.15) +
-# 
-#   annotate("rect", xmin = -Inf, xmax = Inf, ymin = 0, ymax = 0.2, 
-#            fill = "#fc8d59", alpha = 0.15) +
-# 
-#   annotate("rect", xmin = -Inf, xmax = Inf, ymin = 0.2, ymax = 0.4, 
-#            fill = "#fee08b", alpha = 0.15) +
-# 
-#   annotate("rect", xmin = -Inf, xmax = Inf, ymin = 0.4, ymax = 0.6, 
-#            fill = "#d9ef8b", alpha = 0.15) +
-# 
-#   annotate("rect", xmin = -Inf, xmax = Inf, ymin = 0.6, ymax = 0.8, 
-#            fill = "#1a9850", alpha = 0.15) +
-# 
-#   # bars
-#   geom_bar(stat = "identity") +
-#   coord_flip() +
-# 
-#   # threshold lines
-#   geom_hline(yintercept = c(0, 0.2, 0.4, 0.6, 0.8), 
-#              linetype = "dashed", color = "grey") +
-# 
-#   # Labels
-#   annotate("text", x = 0.5, y = -0.05, label = "Poor", size = 3) +
-#   annotate("text", x = 0.5, y = 0.1, label = "Slight", size = 3) +
-#   annotate("text", x = 0.5, y = 0.3, label = "Fair", size = 3) +
-#   annotate("text", x = 0.5, y = 0.5, label = "Moderate", size = 3) +
-#   annotate("text", x = 0.5, y = 0.7, label = "Substantial", size = 3) +
-# 
-#   theme_minimal() +
-#   labs(title = "Average Cohen's Kappa per Item",
-#        x = "Item CSS",
-#        y = "Mean Kappa") +
-#   theme(legend.position = "none")
 
 ```
 ```{r, echo=TRUE, results='hide', message=FALSE, warning=FALSE, class.source="foldable"}
@@ -1214,6 +1106,8 @@ desc_table
 ```
 
 # Gwet's AC1
+
+We compute Gwet's AC1 for each item of the CSS across all visits to assess the inter-rater agreement between clinician and patient. The aim is to complete the strength item who couldn't be interpreted with Cohen's Kappa due to lack of variability in patient response. Gwet's AC1 is more robust for lack of variability and we will use it to compare the results with Cohen's Kappa. 
 
 ```{r}
 #Gwett AC1 for all items
